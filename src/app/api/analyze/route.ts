@@ -4,30 +4,46 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 // ─── Bug #3 Fix: Available tag labels that Gemini must use EXACTLY ────────────
-// These match LIBRARY labels in constants.ts so recommendations highlight correctly in UI
+// Auto-synced from src/lib/constants.ts LIBRARY entries
 const AVAILABLE_TAGS = [
-  // Komposition & Kamera
-  "Produkt Hero Shot", "Produkt Detail Shot", "Flat Lay", "Over-the-Shoulder",
-  "Bird's Eye View", "Worm's Eye View", "Dutch Angle", "Macro Detail",
-  "Tilt-Shift", "360° Rundumblick",
-  // Licht & Atmosphäre
-  "Goldene Stunde", "Blaue Stunde", "Harte Schatten", "Weiches Bokeh",
-  "Rim Light", "Chiaroscuro", "Neon Glow", "Misty Fog", "Candlelight",
-  "Lens Flare", "Studiobeleuchtung", "Softbox Look",
-  // Material & Textur
-  "Glass & Reflection", "Metall & Chrome", "Matte Oberfläche",
-  "Leder & Stoff", "Holz & Natur", "Wasser & Flüssigkeit",
-  "Feuer & Rauch", "Eis & Frost", "Sand & Staub",
-  // Bewegung & Dynamik
-  "Freeze Frame", "Motion Blur", "Particle Explosion", "Liquid Splash",
-  "Slow Motion Feel", "Produktenthüllung", "Floating Objects",
-  // Stimmung & Stil
-  "Luxury & Premium", "Dark & Moody", "Clean & Minimal", "Organic & Natural",
-  "Urban & Streetwear", "Sci-Fi & Futuristisch", "Vintage & Retro",
-  "Editorial & Fashion", "Hyperrealistisch",
-  // Food & Lifestyle
-  "Food Styling", "Steam & Dampf", "Ingredient Flatlay", "Bite Shot",
-  "Pouring Shot", "Lifestyle Kontext", "Hands & Interaction",
+  // Visueller Stil
+  "Cinematic Widescreen", "Documentary Raw", "Luxury Commercial", "Fashion Editorial",
+  "Noir Classique", "Hyperrealist", "Radical Minimalist", "Vintage 35mm",
+  "Futuristisch", "Brutalist", "Impressionistisch", "Industriell",
+  "Wabi-Sabi", "Art Deco", "Bauhaus", "Expressionistisch",
+  "Surrealismus", "Pop Art", "Romantizismus", "Street Photography",
+  "Fine Art", "Reportage", "Conceptual", "Typografisch", "Archival",
+  "Natur-Dokumentation", "Product Hero Shot", "Lookbook", "Food Editorial",
+  "Architectural Photography", "Sozialrealismus", "Piktorialismus",
+  "Neue Sachlichkeit", "Japonismus", "Ukiyo-e Inspired", "Cyber-Noir",
+  "Pastoral", "Grunge", "Glamour Classic", "Scandinavia Clean",
+  "Mediterranean Warmth", "Berlin Underground", "Tokyo Neon",
+  "Desert Minimalism", "Ocean Documentary", "Haute Cuisine", "Street Food Raw",
+  "Makrokunst", "Infrarot", "Cyanotypie",
+  // Stimmung & Atmosphäre
+  "Intim & Privat", "Dramatisch", "Melancholisch", "Mysteriös",
+  "Friedvoll", "Angespannt", "Nostalgisch", "Roh & Ehrlich",
+  "Triumphierend", "Ätherisch", "Verführerisch", "Verspielt",
+  "Episch", "Kalt & Distanziert", "Bedrohlich", "Ehrfürchtig",
+  "Visionär", "Primitiv & Ursprünglich", "Luxuriös", "Bescheiden",
+  "Intensiv", "Verträumt", "Heimelig", "Aufregend", "Einsam", "Festlich",
+  // Kamera & Technik
+  "Weitwinkel", "Telephoto", "Makro", "Fisheye", "Tilt-Shift",
+  "Drohne", "Handheld Raw", "Steadicam", "Hochformat", "Panorama",
+  // Komposition
+  "Symmetrie", "Goldener Schnitt", "Negative Space", "Layering",
+  "Diagonale", "Rahmen im Rahmen", "Zentralperspektive",
+  "Über-die-Schulter", "Vogelperspektive", "Froschperspektive",
+  // Licht & Farbe
+  "Goldene Stunde", "Blaue Stunde", "Hartes Licht", "Weiches Licht",
+  "Gegenlicht", "Chiaroscuro", "Neon", "Monochrom", "Pastelltöne",
+  "Satte Farben", "Entsättigt", "Duotone", "Split Toning",
+  // Bewegung & Zeit
+  "Freeze Frame", "Motion Blur", "Langzeitbelichtung", "Slow Motion",
+  "Zeitraffer", "Panning", "Ghosting",
+  // Kontext & Setting
+  "Studio", "Urban", "Natur", "Architektur", "Interior", "Underwater",
+  "Aerial", "Underground", "Crowd", "Solitude",
 ].join('", "');
 
 // ─── Bug #2 Fix: Mode-aware analysis focus ────────────────────────────────────

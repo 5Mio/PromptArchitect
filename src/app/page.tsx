@@ -33,6 +33,7 @@ function TagWithTooltip({
         onClick={onClick}
         style={{
           padding: "4px 11px", borderRadius: 20, fontSize: 11,
+          overflow: "visible", margin: 4,
           fontFamily: "var(--font-mono)", cursor: "pointer", letterSpacing: "0.3px",
           border: `1px solid ${selected && recommended ? color : selected ? color : recommended ? `${color}80` : `${color}30`}`,
           background: selected && recommended ? `${color}30` : selected ? `${color}20` : recommended ? `${color}14` : `${color}08`,
@@ -46,8 +47,8 @@ function TagWithTooltip({
         {label}
         {recommended && (
           <span style={{
-            position: "absolute", top: -4, right: -4,
-            width: 7, height: 7, borderRadius: "50%",
+            position: "absolute", top: 0, right: 0,
+            width: 8, height: 8, borderRadius: "50%",
             background: selected ? "var(--gold)" : "#ff4d00", boxShadow: selected ? "0 0 4px var(--gold)" : "0 0 4px #ff4d00",
             animation: "recTagGlow 1.5s ease-in-out infinite",
           }} />

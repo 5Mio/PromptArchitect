@@ -47,9 +47,9 @@ export async function POST(req: NextRequest) {
     const tagPairs: Array<{ label: string; contribution: string }> =
       tags?.length
         ? tags.map((label: string, i: number) => ({
-          label,
-          contribution: tagContributions?.[i] || "",
-        }))
+            label,
+            contribution: tagContributions?.[i] || "",
+          }))
         : [];
 
     const context = [
@@ -87,14 +87,15 @@ Your vocabulary, adjective choices, atmosphere descriptors, and emotional framin
 ══════════════════════════════════════════════
 SECTION B — ${mode === "video" ? "VIDEO PACING STRUCTURE" : "IMAGE MODE RULES"}
 ══════════════════════════════════════════════
-${mode === "video"
-        ? `Active Duration: ${duration || "8"} seconds
+${
+  mode === "video"
+    ? `Active Duration: ${duration || "8"} seconds
 Pacing Rule: ${DURATION_PACING[duration || "8"] || DURATION_PACING["8"]}
 
 The motion layer and main_prompt MUST describe action that fits this exact duration.`
-        : `Image Mode Active: Omit the motion layer (set to empty string).
+    : `Image Mode Active: Omit the motion layer (set to empty string).
 Focus on: material surface quality, light behavior, compositional tension, single frozen moment.`
-      }
+}
 
 ══════════════════════════════════════════════
 SECTION C — USE CASE PRIORITY INSTRUCTIONS
@@ -194,7 +195,7 @@ LANGUAGE: All JSON values in English only.`;
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-3-5-sonnet-20240620",
+          model: "claude-opus-4-5",
           max_tokens: 3000,
           system,
           messages: [{ role: "user", content: context }],

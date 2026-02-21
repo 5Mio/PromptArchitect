@@ -47,7 +47,8 @@ function TagWithTooltip({
           <span style={{
             position: "absolute", top: -4, right: -4,
             width: 7, height: 7, borderRadius: "50%",
-            background: "#ff4d00", boxShadow: "0 0 4px #ff4d00",
+            background: "#ff4d00",
+            boxShadow: "0 0 4px #ff4d00",
             animation: "recTagGlow 1.5s ease-in-out infinite",
           }} />
         )}
@@ -56,7 +57,9 @@ function TagWithTooltip({
   );
 }
 
-function SectionLabel({ color, children }: { color: string; children: string }) {
+function SectionLabel({ color, children, tooltip }: {
+  color: string; children: string; tooltip?: string;
+}) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
       <span style={{
@@ -136,71 +139,6 @@ function LayerRow({ layerKey, label, value }: {
   );
 }
 
-// ─── Breakdown Row ────────────────────────────────────────────
-// New component: shows one tag + its product-specific explanation
-
-function BreakdownRow({
-  tagLabel,
-  explanation,
-  tagColor,
-}: {
-  tagLabel: string;
-  explanation: string;
-  tagColor: string;
-}) {
-  return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "auto 1fr",
-      gap: 12,
-      padding: "10px 14px",
-      background: "var(--surface)",
-      border: `1px solid var(--border)`,
-      borderLeft: `3px solid ${tagColor}`,
-      borderRadius: 7,
-      alignItems: "start",
-    }}>
-      {/* Tag label pill */}
-      <span style={{
-        padding: "3px 10px",
-        borderRadius: 20,
-        fontSize: 10,
-        fontFamily: "var(--font-mono)",
-        letterSpacing: "0.3px",
-        border: `1px solid ${tagColor}50`,
-        background: `${tagColor}12`,
-        color: tagColor,
-        whiteSpace: "nowrap",
-        marginTop: 1,
-      }}>
-        {tagLabel}
-      </span>
-      {/* Product-specific explanation */}
-      <span style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 11.5,
-        color: "#a0a0a0",
-        lineHeight: 1.65,
-      }}>
-        {explanation}
-      </span>
-    </div>
-  );
-}
-
-// ─── Category color lookup ────────────────────────────────────
-// Maps a tag label back to its category color for the breakdown display
-
-function useTagColorMap() {
-  const map: Record<string, string> = {};
-  LIBRARY.forEach(cat => {
-    cat.entries.forEach(entry => {
-      map[entry.label] = cat.color;
-    });
-  });
-  return map;
-}
-
 // ─── Main App ─────────────────────────────────────────────────
 
 export default function Home() {
@@ -227,7 +165,6 @@ export default function Home() {
   const fileRef = useRef<HTMLInputElement>(null);
   const currentUseCase = USE_CASES.find(u => u.id === useCase)!;
   const isLoading = step === 1 || step === 2;
-  const tagColorMap = useTagColorMap();
 
   const toggleTag = (label: string) =>
     setSelectedTags(p => p.includes(label) ? p.filter(x => x !== label) : [...p, label]);
@@ -238,6 +175,13 @@ export default function Home() {
       !e.useCases || e.useCases.includes(useCase as UseCaseId)
     ),
   })).filter(cat => cat.entries.length > 0);
+
+  // FIX: tagContributions is now computed inside generate() as a snapshot
+  // This top-level version is only used for the UI indicator
+  const tagContributionsPreview = LIBRARY
+    .flatMap(cat => cat.entries)
+    .filter(e => selectedTags.includes(e.label))
+    .map(e => e.promptContribution);
 
   const handleFile = useCallback((file: File) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -259,17 +203,13 @@ export default function Home() {
     setRecommendations(null);
     setRecDismissed(false);
 
-    // Snapshot at generation time
+    // FIX: Snapshot tagContributions at generation time, not at render time
+    // This ensures the exact set of tags active when user clicks Generate
+    // is what gets sent to the API
     const snapshotTagContributions = LIBRARY
       .flatMap(cat => cat.entries)
       .filter(e => selectedTags.includes(e.label))
       .map(e => e.promptContribution);
-
-    // Keep same order as selectedTags
-    const orderedContributions = selectedTags.map(label => {
-      const entry = LIBRARY.flatMap(c => c.entries).find(e => e.label === label);
-      return entry?.promptContribution || "";
-    });
 
     try {
       let analysis: GeminiAnalysis | null = null;
@@ -278,17 +218,15 @@ export default function Home() {
         const res = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageBase64,
-            mimeType: imageMime,
-            useCaseInstruction: currentUseCase.geminiInstruction,
-          }),
+          body: JSON.stringify({ imageBase64, mimeType: imageMime, useCaseInstruction: currentUseCase.geminiInstruction }),
         });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         analysis = data.analysis;
         setGeminiAnalysis(analysis);
-        if (data.recommendations) setRecommendations(data.recommendations);
+        if (data.recommendations) {
+          setRecommendations(data.recommendations);
+        }
       }
 
       setStep(2);
@@ -298,8 +236,8 @@ export default function Home() {
         body: JSON.stringify({
           imageAnalysis: analysis || {},
           userText: text,
-          tags: selectedTags,               // labels in selection order
-          tagContributions: orderedContributions, // matched by index
+          tags: selectedTags,
+          tagContributions: snapshotTagContributions, // ← FIX: snapshot
           tone,
           duration,
           mode,
@@ -329,9 +267,7 @@ export default function Home() {
 
   const copyAll = () => {
     if (!output) return;
-    navigator.clipboard.writeText(
-      `MAIN PROMPT:\n${output.main_prompt}\n\nNEGATIVE PROMPT:\n${output.negative_prompt}`
-    );
+    navigator.clipboard.writeText(`MAIN PROMPT:\n${output.main_prompt}\n\nNEGATIVE PROMPT:\n${output.negative_prompt}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -341,19 +277,8 @@ export default function Home() {
   const qColor = qScore >= 92 ? "#4ade80" : qScore >= 82 ? "#ffd166" : "#ff6464";
   const dScore = output?.detail_accuracy || 0;
   const dColor = dScore >= 90 ? "#4ade80" : dScore >= 75 ? "#ffd166" : "#ff6464";
-  const tagsIntegrated = (output as any)?.tags_integrated as number | undefined;
-  const promptBreakdown = (output as any)?.prompt_breakdown as Record<string, string> | undefined;
-  const hasBreakdown = promptBreakdown && Object.keys(promptBreakdown).length > 0;
+  const tagsIntegrated = (output as any)?.tags_integrated;
   const canGenerate = (!!imageBase64 || !!text.trim()) && !isLoading;
-
-  // Tab list — breakdown tab only appears when we have data
-  const tabs = [
-    { id: "prompt", label: "Prompt" },
-    { id: "breakdown", label: `Breakdown${hasBreakdown ? ` (${Object.keys(promptBreakdown!).length})` : ""}` },
-    { id: "layers", label: "Ebenen" },
-    { id: "tools", label: "Tools" },
-    { id: "analyse", label: "Rohdaten" },
-  ];
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -417,7 +342,7 @@ export default function Home() {
         <div style={{ borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
 
-            {/* USE CASE SELECTOR */}
+            {/* ── USE CASE SELECTOR ── */}
             <div>
               <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
@@ -461,6 +386,8 @@ export default function Home() {
               <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(255,77,0,0.04)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#666", lineHeight: 1.6 }}>
                 <span style={{ color: "var(--accent)" }}>►</span> {currentUseCase.description}
               </div>
+
+              {/* ── RECOMMENDATION BANNER ── */}
               {recommendations && !recDismissed && (
                 <div style={{ marginTop: 8 }}>
                   <RecommendationBanner
@@ -472,7 +399,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* IMAGE UPLOAD */}
+            {/* ── IMAGE UPLOAD ── */}
             <div>
               <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--gold)", display: "inline-block" }} />
@@ -533,11 +460,14 @@ export default function Home() {
 
             {/* SETTINGS */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {/* Tone */}
               <div>
                 <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 7, fontFamily: "var(--font-mono)", display: "flex", alignItems: "center", gap: 6 }}>
                   Stil-Tonalität
-                  {recommendations?.tone && tone !== recommendations.tone && (
-                    <span style={{ fontSize: 8, color: "#ff4d00", letterSpacing: 1, padding: "1px 5px", background: "rgba(255,77,0,0.1)", borderRadius: 2, animation: "recTagGlow 2s infinite" }}>→ {recommendations.tone}</span>
+                  {recommendations && recommendations.tone && tone !== recommendations.tone && (
+                    <span style={{ fontSize: 8, color: "#ff4d00", letterSpacing: 1, padding: "1px 5px", background: "rgba(255,77,0,0.1)", borderRadius: 2, animation: "recTagGlow 2s infinite" }}>
+                      → {recommendations.tone}
+                    </span>
                   )}
                 </div>
                 <div style={{ position: "relative" }}>
@@ -545,6 +475,7 @@ export default function Home() {
                     width: "100%", appearance: "none", background: "var(--surface)",
                     border: `1px solid ${recommendations?.tone && tone !== recommendations.tone ? "rgba(255,77,0,0.4)" : "var(--border2)"}`,
                     borderRadius: 6, color: "#c8c4be", fontSize: 11, padding: "9px 28px 9px 12px", cursor: "pointer",
+                    animation: recommendations?.tone && tone !== recommendations.tone ? "recTagGlow 2s infinite" : "none",
                   }}>
                     {[["luxury","Luxus / High-End"],["documentary","Dokumentarisch / Roh"],["editorial","Editorial / Fashion"],["dark","Dunkel / Dramatisch"],["artistic","Künstlerisch / Abstrakt"],["commercial","Kommerziell / Klar"]].map(([v, l]) => (
                       <option key={v} value={v}>{l}</option>
@@ -559,12 +490,15 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Duration — video only */}
               {mode === "video" && (
                 <div>
                   <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 7, fontFamily: "var(--font-mono)", display: "flex", alignItems: "center", gap: 6 }}>
                     Videolänge
                     {recommendations?.duration && duration !== recommendations.duration && (
-                      <span style={{ fontSize: 8, color: "#4ade80", letterSpacing: 1, padding: "1px 5px", background: "rgba(74,222,128,0.1)", borderRadius: 2, animation: "recTagGlow 2s infinite" }}>→ {recommendations.duration}s</span>
+                      <span style={{ fontSize: 8, color: "#4ade80", letterSpacing: 1, padding: "1px 5px", background: "rgba(74,222,128,0.1)", borderRadius: 2, animation: "recTagGlow 2s infinite" }}>
+                        → {recommendations.duration}s
+                      </span>
                     )}
                   </div>
                   <div style={{ position: "relative" }}>
@@ -572,6 +506,7 @@ export default function Home() {
                       width: "100%", appearance: "none", background: "var(--surface)",
                       border: `1px solid ${recommendations?.duration && duration !== recommendations.duration ? "rgba(74,222,128,0.4)" : "var(--border2)"}`,
                       borderRadius: 6, color: "#c8c4be", fontSize: 11, padding: "9px 28px 9px 12px", cursor: "pointer",
+                      animation: recommendations?.duration && duration !== recommendations.duration ? "recTagGlow 2s infinite" : "none",
                     }}>
                       {[["3","3 Sek — Micro"],["5","5 Sek — Standard"],["8","8 Sek — Hero Shot"],["15","15 Sek — Feature"]].map(([v, l]) => (
                         <option key={v} value={v}>{l}</option>
@@ -601,10 +536,16 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Active tag count indicator */}
               {selectedTags.length > 0 && (
-                <div style={{ marginBottom: 10, padding: "6px 12px", background: "rgba(255,77,0,0.05)", border: "1px solid rgba(255,77,0,0.15)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#ff6622", display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{
+                  marginBottom: 10, padding: "6px 12px",
+                  background: "rgba(255,77,0,0.05)", border: "1px solid rgba(255,77,0,0.15)",
+                  borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10,
+                  color: "#ff6622", display: "flex", alignItems: "center", gap: 8,
+                }}>
                   <span style={{ fontSize: 8, letterSpacing: 2, textTransform: "uppercase", color: "#ff4d00" }}>AKTIV</span>
-                  <span>{selectedTags.length} Tags — alle werden im Breakdown einzeln erläutert</span>
+                  <span>{selectedTags.length} Tags ausgewählt — alle werden in den Prompt integriert</span>
                 </div>
               )}
 
@@ -618,7 +559,7 @@ export default function Home() {
                         label={entry.label}
                         color={cat.color}
                         selected={selectedTags.includes(entry.label)}
-                        recommended={!!(recommendations?.tags?.includes(entry.label) && !selectedTags.includes(entry.label))}
+                        recommended={!!(recommendations && recommendations.tags?.includes(entry.label) && !selectedTags.includes(entry.label))}
                         onClick={() => toggleTag(entry.label)}
                         promptContribution={entry.promptContribution}
                       />
@@ -629,11 +570,16 @@ export default function Home() {
             </div>
           </div>
 
-          {/* GENERATE */}
+          {/* ── GENERATE ── */}
           <div style={{ padding: "16px 24px 22px", borderTop: "1px solid var(--border)" }}>
             {selectedTags.length > 0 && (
-              <div style={{ marginBottom: 10, padding: "6px 12px", background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.1)", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 9, color: "#4ade8066", letterSpacing: 1 }}>
-                ✓ {selectedTags.length} Tags · {tone} · {mode === "video" ? `${duration}s` : "Bild"} · {useCase}
+              <div style={{
+                marginBottom: 10, padding: "6px 12px",
+                background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.1)",
+                borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 9,
+                color: "#4ade8066", letterSpacing: 1,
+              }}>
+                ✓ {selectedTags.length} Setup-Tags · {tone} Tonalität{mode === "video" ? ` · ${duration}s Format` : ""} · {useCase} Use Case
               </div>
             )}
             <button onClick={generate} disabled={!canGenerate} style={{
@@ -665,15 +611,13 @@ export default function Home() {
         <div style={{ background: "#060606", display: "flex", flexDirection: "column" }}>
           <div style={{ padding: "13px 24px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", gap: 2 }}>
-              {tabs.map(({ id, label }) => (
+              {[["prompt","Prompt"],["layers","Ebenen"],["tools","Tools"],["analyse","Rohdaten"]].map(([id, label]) => (
                 <button key={id} onClick={() => setActiveTab(id)} style={{
                   padding: "6px 12px", fontSize: 10, fontWeight: 600, letterSpacing: 1.5,
                   textTransform: "uppercase", cursor: "pointer", fontFamily: "var(--font-mono)",
                   border: "none", borderRadius: 5, transition: "all 0.15s",
                   background: activeTab === id ? "var(--surface2)" : "transparent",
-                  color: activeTab === id
-                    ? id === "breakdown" ? "var(--gold)" : "var(--text)"
-                    : id === "breakdown" && hasBreakdown ? "#665500" : "var(--text-dim)",
+                  color: activeTab === id ? "var(--text)" : "var(--text-dim)",
                 }}>{label}</button>
               ))}
             </div>
@@ -688,15 +632,14 @@ export default function Home() {
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-
             {/* EMPTY */}
             {!output && step === 0 && (
               <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center", opacity: 0.3 }}>
                 <div style={{ fontSize: 44 }}>◈</div>
                 <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 20, color: "#888" }}>Deine Vision wartet</div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#555", lineHeight: 2 }}>
-                  Tags wählen → generieren → im Breakdown Tab<br />
-                  siehst du wie jeder Tag konkret angewendet wurde
+                  Hover über Elemente für schnelle Erklärung<br />
+                  Klick für detaillierte Informationen
                 </div>
               </div>
             )}
@@ -709,7 +652,7 @@ export default function Home() {
                   {step === 1 ? "Gemini liest dein Bild..." : "Claude erstellt den Prompt..."}
                 </div>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#333", letterSpacing: 1, textAlign: "center", lineHeight: 1.8 }}>
-                  {step === 1 ? "Farben · Materialien · Licht · Details" : "Bild-Daten + Tags + Breakdown → Prompt"}
+                  {step === 1 ? "Farben · Materialien · Licht · Details" : "Bild-Daten + Intention + Orchestra → Prompt"}
                 </div>
               </div>
             )}
@@ -718,31 +661,34 @@ export default function Home() {
             {output && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeUp 0.4s ease" }}>
 
-                {/* Score Bars */}
+                {/* Score Bars — FIX: added tags_integrated bar */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <ScoreBar label="Prompt Qualität" value={qScore} color={qColor} tooltipKey="quality_score" />
                   <ScoreBar label="Detail-Genauigkeit" value={dScore} color={dColor} tooltipKey="detail_accuracy" />
 
+                  {/* Tags integrated bar — only shows when tags were selected */}
                   {selectedTags.length > 0 && tagsIntegrated !== undefined && (
                     <Tooltip data={{
-                      short: `${tagsIntegrated} von ${selectedTags.length} Tags wurden in den Prompt integriert.`,
-                      effekt: "Prüft ob alle Orchestra Tags tatsächlich im generierten Prompt landen.",
-                      profi_tipp: tagsIntegrated < selectedTags.length
-                        ? "Breakdown Tab öffnen um zu sehen welche Tags fehlen."
-                        : "Alle Tags erfolgreich integriert — Breakdown Tab zeigt die Details.",
+                      short: `${tagsIntegrated} von ${selectedTags.length} ausgewählten Tags wurden in den Prompt integriert.`,
+                      effekt: "Überprüft ob alle Orchestra Library Tags tatsächlich im generierten Prompt landen.",
+                      profi_tipp: tagsIntegrated < selectedTags.length ? "Weniger Tags auswählen oder Use Case anpassen für bessere Integration." : "Alle Tags wurden erfolgreich integriert.",
                     }}>
                       <div style={{
                         display: "flex", alignItems: "center", gap: 12, padding: "9px 14px",
                         background: "var(--surface)", borderRadius: 7, border: "1px solid var(--border)",
                         cursor: "pointer",
                       }}>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", color: "var(--text-dim)", whiteSpace: "nowrap", minWidth: 110 }}>Tags integriert</span>
+                        <span style={{
+                          fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 2,
+                          textTransform: "uppercase", color: "var(--text-dim)",
+                          whiteSpace: "nowrap", minWidth: 110,
+                        }}>Tags integriert</span>
                         <div style={{ flex: 1, height: 3, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
                           <div style={{
-                            width: `${(tagsIntegrated / selectedTags.length) * 100}%`,
+                            width: `${selectedTags.length > 0 ? (tagsIntegrated / selectedTags.length) * 100 : 0}%`,
                             height: "100%",
                             background: tagsIntegrated === selectedTags.length ? "#4ade80" : "#ffd166",
-                            borderRadius: 2, transition: "width 1.2s ease",
+                            borderRadius: 2, transition: "width 1.2s ease"
                           }} />
                         </div>
                         <span style={{
@@ -764,22 +710,22 @@ export default function Home() {
                   </Tooltip>
                 )}
 
-                {/* Use Case Note */}
+                {/* Use Case + Tone Note */}
                 {output.use_case_notes && (
                   <div style={{ padding: "8px 12px", background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#4ade8088", lineHeight: 1.6, display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <span>{currentUseCase.icon}</span>
-                    <span style={{ flex: 1 }}>{output.use_case_notes}</span>
+                    <span>{output.use_case_notes}</span>
                     <span style={{ marginLeft: "auto", fontSize: 8, letterSpacing: 1.5, color: "#333", whiteSpace: "nowrap", paddingTop: 1 }}>
                       {tone.toUpperCase()} · {mode === "video" ? `${duration}S` : "IMG"}
                     </span>
                   </div>
                 )}
 
-                {/* ── TAB: PROMPT ── */}
+                {/* TAB: PROMPT */}
                 {activeTab === "prompt" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     <div>
-                      <SectionLabel color="var(--accent)">Haupt-Prompt (Englisch — Copy & Paste)</SectionLabel>
+                      <SectionLabel color="var(--accent)">Haupt-Prompt (Englisch — Best Practice)</SectionLabel>
                       <div style={{ background: "var(--surface)", border: "1px solid var(--border2)", borderLeft: "3px solid var(--accent)", borderRadius: 8, padding: "14px 16px", fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.9, color: "#c8c4be", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                         {output.main_prompt}
                       </div>
@@ -790,59 +736,23 @@ export default function Home() {
                         {output.negative_prompt}
                       </div>
                     </div>
-                    {hasBreakdown && (
-                      <div style={{ padding: "8px 12px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.1)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#665500", display: "flex", alignItems: "center", gap: 8 }}>
-                        <span>◈</span>
-                        <span>
-                          {Object.keys(promptBreakdown!).length} Tags erklärt im
-                          <button onClick={() => setActiveTab("breakdown")} style={{ background: "none", border: "none", color: "var(--gold)", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, padding: "0 4px", textDecoration: "underline" }}>
-                            Breakdown Tab
-                          </button>
-                          — sieh wie jeder Tag auf dein Produkt angewendet wurde
-                        </span>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                {/* ── TAB: BREAKDOWN (new) ── */}
-                {activeTab === "breakdown" && (
-                  <div>
-                    <SectionLabel color="var(--gold)">Prompt Breakdown — Tag-Anwendung auf dieses Produkt</SectionLabel>
-
-                    {hasBreakdown ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {/* Intro note */}
-                        <div style={{ padding: "8px 12px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.08)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#555", lineHeight: 1.6, marginBottom: 4 }}>
-                          Jeder Eintrag zeigt wie der Tag <em>spezifisch auf dieses Bild/Produkt</em> angewendet wurde — nicht die generische Definition.
-                        </div>
-
-                        {Object.entries(promptBreakdown!).map(([tagLabel, explanation]) => (
-                          <BreakdownRow
-                            key={tagLabel}
-                            tagLabel={tagLabel}
-                            explanation={explanation}
-                            tagColor={tagColorMap[tagLabel] || "#666"}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textAlign: "center", paddingTop: 60 }}>
-                        Keine Tags ausgewählt — wähle Tags aus der Orchestra Library und generiere erneut.
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── TAB: LAYERS ── */}
+                {/* TAB: LAYERS */}
                 {activeTab === "layers" && output.layers && (
                   <div>
                     <SectionLabel color="var(--gold)">Ebenen-Analyse</SectionLabel>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {[
-                        ["world","Welt"], ["subject","Subjekt"], ["motion","Bewegung"],
-                        ["lighting","Licht"], ["lens","Linse"], ["color","Farbe"],
-                        ["physics","Physik"], ["intention","Intention"],
+                        ["world","Welt"],
+                        ["subject","Subjekt"],
+                        ["motion","Bewegung"],
+                        ["lighting","Licht"],
+                        ["lens","Linse"],
+                        ["color","Farbe"],
+                        ["physics","Physik"],
+                        ["intention","Intention"],
                       ].map(([key, label]) => {
                         const val = output.layers[key as keyof typeof output.layers];
                         if (!val) return null;
@@ -852,27 +762,28 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* ── TAB: TOOLS ── */}
+                {/* TAB: TOOLS */}
                 {activeTab === "tools" && (
                   <div>
                     <SectionLabel color="var(--green)">Tool Empfehlung</SectionLabel>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                      {tools.map(tool => {
-                        const isRec = output.recommended_tool &&
-                          tool.name.toLowerCase().includes(output.recommended_tool.toLowerCase().split(" ")[0]);
-                        return (
-                          <div key={tool.name} style={{ background: isRec ? "rgba(74,222,128,0.05)" : "var(--surface)", border: `1px solid ${isRec ? "var(--green)" : "var(--border)"}`, borderRadius: 8, padding: "12px 10px", textAlign: "center" }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{tool.name}</div>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{tool.use}</div>
-                            {isRec && <div style={{ display: "inline-block", marginTop: 7, fontSize: 8, padding: "2px 8px", background: "rgba(74,222,128,0.12)", color: "var(--green)", borderRadius: 2, fontFamily: "var(--font-mono)", letterSpacing: 1.5 }}>BESTE WAHL</div>}
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <Tooltip data={OUTPUT_TOOLTIPS["recommended_tool"] || { short: "Empfohlenes AI-Tool" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, cursor: "pointer" }}>
+                        {tools.map(tool => {
+                          const isRec = output.recommended_tool && tool.name.toLowerCase().includes(output.recommended_tool.toLowerCase().split(" ")[0]);
+                          return (
+                            <div key={tool.name} style={{ background: isRec ? "rgba(74,222,128,0.05)" : "var(--surface)", border: `1px solid ${isRec ? "var(--green)" : "var(--border)"}`, borderRadius: 8, padding: "12px 10px", textAlign: "center" }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{tool.name}</div>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{tool.use}</div>
+                              {isRec && <div style={{ display: "inline-block", marginTop: 7, fontSize: 8, padding: "2px 8px", background: "rgba(74,222,128,0.12)", color: "var(--green)", borderRadius: 2, fontFamily: "var(--font-mono)", letterSpacing: 1.5 }}>BESTE WAHL</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Tooltip>
                   </div>
                 )}
 
-                {/* ── TAB: ANALYSE ── */}
+                {/* TAB: RAW ANALYSIS */}
                 {activeTab === "analyse" && (
                   geminiAnalysis ? (
                     <div>

@@ -1065,6 +1065,7 @@ export interface PromptOutput {
   tags_integrated?: number;
   main_prompt: string;
   negative_prompt: string;
+  prompt_breakdown?: Record<string, string>;
   layers: {
     world?: string;
     subject?: string;

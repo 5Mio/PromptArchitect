@@ -163,8 +163,10 @@ Return ONLY valid JSON (no markdown fences, no newlines inside string values):
   "main_prompt": "<complete production-ready prompt in English, 250-600 chars, tone: ${tone || "luxury"}, all tags integrated>",
   "negative_prompt": "<specific avoidances based on image content and common AI generation failures>",
   "prompt_breakdown": {
-    "<exact tag label>": "<1-2 sentences: product-specific application — NOT the generic definition>",
-    "<exact tag label>": "<1-2 sentences: product-specific application — NOT the generic definition>"
+    ${tagPairs.length > 0
+      ? tagPairs.map(t => `"${t.label}": "<how THIS specific product/scene uses ${t.label} — reference actual colors, materials, shapes from the image analysis>"`).join(',\n    ')
+      : '"_note": "no tags selected"'
+    }
   },
   "layers": {
     "world": "<environment with all visible details from analysis, described in ${tone || "luxury"} tone>",

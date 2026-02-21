@@ -219,6 +219,8 @@ export default function Home() {
   const [geminiAnalysis, setGeminiAnalysis] = useState<GeminiAnalysis | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [recDismissed, setRecDismissed] = useState(false);
+  const [geminiDone, setGeminiDone] = useState(false);  // true after analyze-only run
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // spinner for analyze button
   const [output, setOutput] = useState<PromptOutput | null>(null);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("prompt");
@@ -251,6 +253,41 @@ export default function Home() {
     reader.readAsDataURL(file);
   }, []);
 
+  // ─── Analyze-only: Gemini vision + tag recommendations, no Claude ───────────
+  const analyzeOnly = async () => {
+    if (!imageBase64) return;
+    setError("");
+    setIsAnalyzing(true);
+    setGeminiDone(false);
+    setRecommendations(null);
+    setRecDismissed(false);
+    setGeminiAnalysis(null);
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64,
+          mimeType: imageMime,
+          useCaseInstruction: currentUseCase.geminiInstruction,
+          mode,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setGeminiAnalysis(data.analysis);
+      if (data.recommendations) {
+        setRecommendations(data.recommendations);
+        applyRecommendations(data.recommendations);
+      }
+      setGeminiDone(true);
+    } catch (e: any) {
+      setError(e.message || "Gemini Analyse fehlgeschlagen");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const generate = async () => {
     if (!imageBase64 && !text.trim()) return;
     setError("");
@@ -272,8 +309,12 @@ export default function Home() {
     });
 
     try {
-      let analysis: GeminiAnalysis | null = null;
-      if (imageBase64) {
+      // If analyzeOnly was already run, reuse stored analysis — skip Gemini call
+      let analysis: GeminiAnalysis | null = geminiDone
+        ? (geminiAnalysis as GeminiAnalysis | null)
+        : null;
+
+      if (imageBase64 && !geminiDone) {
         setStep(1);
         const res = await fetch("/api/analyze", {
           method: "POST",
@@ -345,7 +386,8 @@ export default function Home() {
   const tagsIntegrated = (output as any)?.tags_integrated as number | undefined;
   const promptBreakdown = (output as any)?.prompt_breakdown as Record<string, string> | undefined;
   const hasBreakdown = promptBreakdown && Object.keys(promptBreakdown).length > 0;
-  const canGenerate = (!!imageBase64 || !!text.trim()) && !isLoading;
+  const canAnalyze = !!imageBase64 && !isAnalyzing && !isLoading;
+  const canGenerate = (!!imageBase64 || !!text.trim()) && !isLoading && !isAnalyzing;
 
   // Tab list — breakdown tab only appears when we have data
   const tabs = [
@@ -462,6 +504,32 @@ export default function Home() {
               <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(255,77,0,0.04)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#666", lineHeight: 1.6 }}>
                 <span style={{ color: "var(--accent)" }}>►</span> {currentUseCase.description}
               </div>
+              {/* ─── ANALYZE BUTTON — separate from generate ─── */}
+              {imageBase64 && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    onClick={analyzeOnly}
+                    disabled={!canAnalyze}
+                    style={{
+                      width: "100%", padding: "10px 0",
+                      background: geminiDone ? "rgba(212,175,55,0.12)" : canAnalyze ? "rgba(66,133,244,0.15)" : "var(--surface)",
+                      border: geminiDone ? "1px solid var(--gold)" : canAnalyze ? "1px solid #4285f4" : "1px solid var(--border)",
+                      borderRadius: 6, cursor: canAnalyze ? "pointer" : "default",
+                      color: geminiDone ? "var(--gold)" : canAnalyze ? "#4285f4" : "var(--text-dim)",
+                      fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 700,
+                      letterSpacing: 2, textTransform: "uppercase",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    {isAnalyzing
+                      ? <span style={{ animation: "pulse 1.2s infinite" }}>① Gemini analysiert Tags…</span>
+                      : geminiDone
+                        ? "✓ Tags analysiert — erneut analysieren"
+                        : "◎ Tags analysieren →"}
+                  </button>
+                </div>
+              )}
+
               {recommendations && !recDismissed && (
                 <div style={{ marginTop: 8 }}>
                   <RecommendationBanner
@@ -478,7 +546,9 @@ export default function Home() {
               <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--gold)", display: "inline-block" }} />
                 Bild-Rohmaterial
-                <span style={{ color: "var(--accent)", fontSize: 9 }}>— Gemini analysiert automatisch</span>
+                <span style={{ color: geminiDone ? "var(--gold)" : "var(--accent)", fontSize: 9 }}>
+                  {geminiDone ? "— ✓ Gemini Analyse abgeschlossen" : "— Gemini analysiert auf Anfrage"}
+                </span>
               </div>
               {imagePreview ? (
                 <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid var(--accent)" }}>
@@ -487,7 +557,7 @@ export default function Home() {
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--gold)" }}>
                       {geminiAnalysis ? "✓ Gemini Analyse abgeschlossen" : "Bereit für Gemini Analyse"}
                     </span>
-                    <button onClick={() => { setImagePreview(null); setImageBase64(null); setGeminiAnalysis(null); }} style={{ background: "rgba(0,0,0,0.7)", border: "1px solid #444", color: "#ccc", width: 26, height: 26, borderRadius: "50%", cursor: "pointer", fontSize: 14 }}>×</button>
+                    <button onClick={() => { setImagePreview(null); setImageBase64(null); setGeminiAnalysis(null); setGeminiDone(false); setRecommendations(null); setRecDismissed(false); }} style={{ background: "rgba(0,0,0,0.7)", border: "1px solid #444", color: "#ccc", width: 26, height: 26, borderRadius: "50%", cursor: "pointer", fontSize: 14 }}>×</button>
                   </div>
                 </div>
               ) : (
@@ -649,7 +719,9 @@ export default function Home() {
             }}>
               {step === 1 ? <span style={{ animation: "pulse 1.2s infinite" }}>① Gemini analysiert Bild...</span>
                : step === 2 ? <span style={{ animation: "pulse 1.2s infinite" }}>② Claude erstellt Prompt...</span>
-               : `${currentUseCase.icon} ${mode === "video" ? "Video" : "Bild"} Prompt für "${currentUseCase.label}" generieren →`}
+               : geminiDone
+                 ? `${currentUseCase.icon} ② ${mode === "video" ? "Video" : "Bild"} Prompt generieren →`
+                 : `${currentUseCase.icon} ${mode === "video" ? "Video" : "Bild"} Prompt für "${currentUseCase.label}" generieren →`}
               {isLoading && (
                 <div style={{ position: "absolute", bottom: 0, left: "-60%", width: "60%", height: 2, background: step === 1 ? "#4285f4" : "var(--accent)", animation: "slide 1.4s ease-in-out infinite" }} />
               )}

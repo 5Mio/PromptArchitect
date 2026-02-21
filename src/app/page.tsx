@@ -1,4 +1,4 @@
-"use client";
+—"use client";
 
 import { useState, useRef, useCallback } from "react";
 import {
@@ -34,20 +34,21 @@ function TagWithTooltip({
         style={{
           padding: "4px 11px", borderRadius: 20, fontSize: 11,
           fontFamily: "var(--font-mono)", cursor: "pointer", letterSpacing: "0.3px",
-          border: `1px solid ${selected ? color : recommended ? `${color}70` : `${color}30`}`,
-          background: selected ? `${color}20` : recommended ? `${color}12` : `${color}08`,
-          color: selected ? color : recommended ? `${color}cc` : "#555",
+          border: `1px solid ${selected && recommended ? color : selected ? color : recommended ? `${color}80` : `${color}30`}`,
+          background: selected && recommended ? `${color}30` : selected ? `${color}20` : recommended ? `${color}14` : `${color}08`,
+          color: selected ? color : recommended ? `${color}dd` : "#555",
+          boxShadow: recommended ? `0 0 6px ${color}40` : "none",
           transition: "all 0.2s",
-          animation: recommended && !selected ? "recTagGlow 2s ease-in-out infinite" : "none",
+          animation: recommended ? "recTagGlow 2.5s ease-in-out infinite" : "none",
           position: "relative",
         }}
       >
         {label}
-        {recommended && !selected && (
+        {recommended && (
           <span style={{
             position: "absolute", top: -4, right: -4,
             width: 7, height: 7, borderRadius: "50%",
-            background: "#ff4d00", boxShadow: "0 0 4px #ff4d00",
+            background: selected ? "var(--gold)" : "#ff4d00", boxShadow: selected ? "0 0 4px var(--gold)" : "0 0 4px #ff4d00",
             animation: "recTagGlow 1.5s ease-in-out infinite",
           }} />
         )}
@@ -689,7 +690,7 @@ export default function Home() {
                         label={entry.label}
                         color={cat.color}
                         selected={selectedTags.includes(entry.label)}
-                        recommended={!!(recommendations?.tags?.includes(entry.label) && !selectedTags.includes(entry.label))}
+                        recommended={!!(recommendations?.tags?.includes(entry.label))}
                         onClick={() => toggleTag(entry.label)}
                         promptContribution={entry.promptContribution}
                       />

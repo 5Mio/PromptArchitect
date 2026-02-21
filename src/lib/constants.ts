@@ -1062,6 +1062,7 @@ export interface GeminiAnalysis {
 export interface PromptOutput {
   quality_score: number;
   detail_accuracy: number;
+  tags_integrated?: number;
   main_prompt: string;
   negative_prompt: string;
   layers: {

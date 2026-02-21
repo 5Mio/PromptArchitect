@@ -176,7 +176,9 @@ export default function Home() {
     ),
   })).filter(cat => cat.entries.length > 0);
 
-  const tagContributions = LIBRARY
+  // FIX: tagContributions is now computed inside generate() as a snapshot
+  // This top-level version is only used for the UI indicator
+  const tagContributionsPreview = LIBRARY
     .flatMap(cat => cat.entries)
     .filter(e => selectedTags.includes(e.label))
     .map(e => e.promptContribution);
@@ -201,6 +203,14 @@ export default function Home() {
     setRecommendations(null);
     setRecDismissed(false);
 
+    // FIX: Snapshot tagContributions at generation time, not at render time
+    // This ensures the exact set of tags active when user clicks Generate
+    // is what gets sent to the API
+    const snapshotTagContributions = LIBRARY
+      .flatMap(cat => cat.entries)
+      .filter(e => selectedTags.includes(e.label))
+      .map(e => e.promptContribution);
+
     try {
       let analysis: GeminiAnalysis | null = null;
       if (imageBase64) {
@@ -214,7 +224,6 @@ export default function Home() {
         if (data.error) throw new Error(data.error);
         analysis = data.analysis;
         setGeminiAnalysis(analysis);
-        // Show recommendations if returned
         if (data.recommendations) {
           setRecommendations(data.recommendations);
         }
@@ -225,8 +234,14 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageAnalysis: analysis || {}, userText: text, tags: selectedTags,
-          tagContributions, tone, duration, mode, useCase,
+          imageAnalysis: analysis || {},
+          userText: text,
+          tags: selectedTags,
+          tagContributions: snapshotTagContributions, // ← FIX: snapshot
+          tone,
+          duration,
+          mode,
+          useCase,
           useCaseInstruction: currentUseCase.claudeInstruction,
         }),
       });
@@ -262,6 +277,7 @@ export default function Home() {
   const qColor = qScore >= 92 ? "#4ade80" : qScore >= 82 ? "#ffd166" : "#ff6464";
   const dScore = output?.detail_accuracy || 0;
   const dColor = dScore >= 90 ? "#4ade80" : dScore >= 75 ? "#ffd166" : "#ff6464";
+  const tagsIntegrated = (output as any)?.tags_integrated;
   const canGenerate = (!!imageBase64 || !!text.trim()) && !isLoading;
 
   return (
@@ -297,7 +313,7 @@ export default function Home() {
       }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
           <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.5 }}>PromptArchitect</span>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 3, color: "var(--accent)", padding: "3px 8px", border: "1px solid var(--accent)", borderRadius: 2 }}>PRO v5</span>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 3, color: "var(--accent)", padding: "3px 8px", border: "1px solid var(--accent)", borderRadius: 2 }}>PRO v5.1</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-dim)", marginLeft: 6 }}>by AIJantaStack</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -442,7 +458,7 @@ export default function Home() {
               />
             </div>
 
-            {/* SETTINGS — with tooltips */}
+            {/* SETTINGS */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {/* Tone */}
               <div>
@@ -507,7 +523,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* ORCHESTRA LIBRARY — all tags with tooltips */}
+            {/* ORCHESTRA LIBRARY */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                 <span style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-dim)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>Orchestra Library</span>
@@ -519,6 +535,20 @@ export default function Home() {
                   </button>
                 )}
               </div>
+
+              {/* Active tag count indicator */}
+              {selectedTags.length > 0 && (
+                <div style={{
+                  marginBottom: 10, padding: "6px 12px",
+                  background: "rgba(255,77,0,0.05)", border: "1px solid rgba(255,77,0,0.15)",
+                  borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10,
+                  color: "#ff6622", display: "flex", alignItems: "center", gap: 8,
+                }}>
+                  <span style={{ fontSize: 8, letterSpacing: 2, textTransform: "uppercase", color: "#ff4d00" }}>AKTIV</span>
+                  <span>{selectedTags.length} Tags ausgewählt — alle werden in den Prompt integriert</span>
+                </div>
+              )}
+
               {filteredLibrary.map(cat => (
                 <div key={cat.id} style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: cat.color + "80", marginBottom: 7, fontFamily: "var(--font-mono)" }}>{cat.label}</div>
@@ -542,6 +572,16 @@ export default function Home() {
 
           {/* ── GENERATE ── */}
           <div style={{ padding: "16px 24px 22px", borderTop: "1px solid var(--border)" }}>
+            {selectedTags.length > 0 && (
+              <div style={{
+                marginBottom: 10, padding: "6px 12px",
+                background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.1)",
+                borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 9,
+                color: "#4ade8066", letterSpacing: 1,
+              }}>
+                ✓ {selectedTags.length} Setup-Tags · {tone} Tonalität{mode === "video" ? ` · ${duration}s Format` : ""} · {useCase} Use Case
+              </div>
+            )}
             <button onClick={generate} disabled={!canGenerate} style={{
               width: "100%", padding: "15px 0",
               background: canGenerate ? "var(--accent)" : "var(--surface)",
@@ -621,13 +661,47 @@ export default function Home() {
             {output && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeUp 0.4s ease" }}>
 
-                {/* Score Bars — with tooltips */}
+                {/* Score Bars — FIX: added tags_integrated bar */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <ScoreBar label="Prompt Qualität" value={qScore} color={qColor} tooltipKey="quality_score" />
                   <ScoreBar label="Detail-Genauigkeit" value={dScore} color={dColor} tooltipKey="detail_accuracy" />
+
+                  {/* Tags integrated bar — only shows when tags were selected */}
+                  {selectedTags.length > 0 && tagsIntegrated !== undefined && (
+                    <Tooltip data={{
+                      short: `${tagsIntegrated} von ${selectedTags.length} ausgewählten Tags wurden in den Prompt integriert.`,
+                      effekt: "Überprüft ob alle Orchestra Library Tags tatsächlich im generierten Prompt landen.",
+                      profi_tipp: tagsIntegrated < selectedTags.length ? "Weniger Tags auswählen oder Use Case anpassen für bessere Integration." : "Alle Tags wurden erfolgreich integriert.",
+                    }}>
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 12, padding: "9px 14px",
+                        background: "var(--surface)", borderRadius: 7, border: "1px solid var(--border)",
+                        cursor: "pointer",
+                      }}>
+                        <span style={{
+                          fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 2,
+                          textTransform: "uppercase", color: "var(--text-dim)",
+                          whiteSpace: "nowrap", minWidth: 110,
+                        }}>Tags integriert</span>
+                        <div style={{ flex: 1, height: 3, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{
+                            width: `${selectedTags.length > 0 ? (tagsIntegrated / selectedTags.length) * 100 : 0}%`,
+                            height: "100%",
+                            background: tagsIntegrated === selectedTags.length ? "#4ade80" : "#ffd166",
+                            borderRadius: 2, transition: "width 1.2s ease"
+                          }} />
+                        </div>
+                        <span style={{
+                          fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500,
+                          color: tagsIntegrated === selectedTags.length ? "#4ade80" : "#ffd166",
+                          minWidth: 55, textAlign: "right",
+                        }}>{tagsIntegrated}/{selectedTags.length}</span>
+                      </div>
+                    </Tooltip>
+                  )}
                 </div>
 
-                {/* Ghost Director — with tooltip */}
+                {/* Ghost Director */}
                 {output.ghost_director && (
                   <Tooltip data={OUTPUT_TOOLTIPS["ghost_director"] || { short: "Unsichtbare Regie-Philosophie" }}>
                     <div style={{ padding: "11px 15px", background: "rgba(255,77,0,0.03)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 8, fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 13, color: "#666", lineHeight: 1.7, cursor: "pointer" }}>
@@ -636,10 +710,14 @@ export default function Home() {
                   </Tooltip>
                 )}
 
-                {/* Use Case Note */}
+                {/* Use Case + Tone Note */}
                 {output.use_case_notes && (
-                  <div style={{ padding: "8px 12px", background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#4ade8088", lineHeight: 1.6 }}>
-                    {currentUseCase.icon} {output.use_case_notes}
+                  <div style={{ padding: "8px 12px", background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#4ade8088", lineHeight: 1.6, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span>{currentUseCase.icon}</span>
+                    <span>{output.use_case_notes}</span>
+                    <span style={{ marginLeft: "auto", fontSize: 8, letterSpacing: 1.5, color: "#333", whiteSpace: "nowrap", paddingTop: 1 }}>
+                      {tone.toUpperCase()} · {mode === "video" ? `${duration}S` : "IMG"}
+                    </span>
                   </div>
                 )}
 
@@ -661,7 +739,7 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* TAB: LAYERS — with tooltips */}
+                {/* TAB: LAYERS */}
                 {activeTab === "layers" && output.layers && (
                   <div>
                     <SectionLabel color="var(--gold)">Ebenen-Analyse</SectionLabel>

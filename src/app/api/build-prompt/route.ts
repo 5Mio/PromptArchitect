@@ -14,6 +14,29 @@ export async function POST(req: NextRequest) {
       useCaseInstruction,
     } = await req.json();
 
+    // ─── INPUT VALIDATION ─────────────────────────────────────
+    const hasContent = (imageAnalysis && Object.keys(imageAnalysis).length > 0) || 
+                       (userText && userText.trim().length > 0) ||
+                       (tags && tags.length > 0);
+    if (!hasContent) {
+      return NextResponse.json(
+        { error: "Mindestens ein Eingabefeld erforderlich: Bild, Text oder Tags" },
+        { status: 400 }
+      );
+    }
+    if (!tone) {
+      return NextResponse.json(
+        { error: "Tone ist ein Pflichtfeld" },
+        { status: 400 }
+      );
+    }
+    if (!mode) {
+      return NextResponse.json(
+        { error: "Mode ist ein Pflichtfeld (video oder image)" },
+        { status: 400 }
+      );
+    }
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       return NextResponse.json(

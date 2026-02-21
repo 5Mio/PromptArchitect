@@ -97,19 +97,24 @@ Analyze the provided image and return a JSON object with these exact fields:
   "background": "Background elements and setting",
   "unique_details": "Distinctive visual characteristics worth preserving",
   "recommendations": {
-    "use_case": "one of: produkt|food|fashion|lifestyle",
+    "use_case": "one of: produkt|marketing|story|humor|lifestyle|food|fashion|architektur|natur|technologie|event|portrait",
     "tone": "one of: luxury|documentary|editorial|dark|artistic|commercial",
     "duration": "one of: 3|5|8|15",
-    "tags": ["EXACTLY 3-6 tags from this list only: \"${AVAILABLE_TAGS}\""]
+    "tags_visueller_stil": ["0-3 tags: Cinematic Widescreen, Documentary Raw, Luxury Commercial, Fashion Editorial, Noir Classique, Hyperrealist, Radical Minimalist, Vintage 35mm, Futuristisch, Wabi-Sabi, Art Deco, Bauhaus, Product Hero Shot, Lookbook, Cyber-Noir, Glamour Classic, Scandinavia Clean, Berlin Underground, Tokyo Neon, Desert Minimalism"],
+    "tags_stimmung": ["0-3 tags: Dramatisch, Melancholisch, Mysteriös, Friedvoll, Nostalgisch, Triumphierend, Ätherisch, Verführerisch, Episch, Luxuriös, Intensiv, Aufregend, Bedrohlich, Visionär, Primitiv & Ursprünglich"],
+    "tags_kamera": ["0-2 tags: Weitwinkel, Telephoto, Makro, Fisheye, Tilt-Shift, Drohne, Handheld Raw, Steadicam, Hochformat, Panorama"],
+    "tags_licht": ["0-2 tags: Goldene Stunde, Blaue Stunde, Hartes Licht, Weiches Licht, Gegenlicht, Chiaroscuro, Neon, Monochrom, Satte Farben, Entsättigt"],
+    "tags_komposition": ["0-2 tags: Symmetrie, Goldener Schnitt, Negative Space, Layering, Diagonale, Rahmen im Rahmen, Zentralperspektive, Vogelperspektive, Froschperspektive"],
+    "tags_material": ["0-2 tags: Metall Poliert, Metall Chrome, Glas Klar, Leder Glatt, Leder Krokodil, Holz Hell, Stein Marmor, Wasser Tropfen, Textil Seide, Textil Leder"]
   }
 }
 
 CRITICAL RULES FOR RECOMMENDATIONS:
-1. "tags" array MUST contain only labels from the list above — copy them letter-perfect
-2. "use_case" must be exactly one of the 4 values shown
-3. "tone" must be exactly one of the 6 values shown
-4. "duration" is only relevant for video mode; for image mode still return a value
-
+1. Each tags array MUST contain only labels from its listed options — copy letter-perfect
+2. Return empty array [] for categories not relevant to this image  
+3. "use_case" must be exactly one of the 12 values shown
+4. "tone" must be exactly one of the 6 values shown
+5. Recommend tags across MULTIPLE categories — a watch should get visueller_stil + licht + komposition + material tags
 Return ONLY valid JSON. No markdown fences, no explanation text.`;
 
     let parsed: any;
@@ -184,6 +189,19 @@ Return ONLY valid JSON. No markdown fences, no explanation text.`;
 
     // Split analysis from recommendations
     const { recommendations, ...analysis } = parsed;
+
+    // Merge category-specific tags into single flat array for page.tsx
+    if (recommendations) {
+      const allTags = [
+        ...(recommendations.tags_visueller_stil || []),
+        ...(recommendations.tags_stimmung || []),
+        ...(recommendations.tags_kamera || []),
+        ...(recommendations.tags_licht || []),
+        ...(recommendations.tags_komposition || []),
+        ...(recommendations.tags_material || []),
+      ].filter(t => typeof t === 'string' && t.length > 0);
+      recommendations.tags = allTags;
+    }
 
     return NextResponse.json({
       analysis,

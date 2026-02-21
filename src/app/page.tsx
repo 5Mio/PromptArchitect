@@ -13,7 +13,7 @@ import {
 } from "@/lib/tooltips";
 import { RecommendationBanner, type Recommendations } from "@/components/RecommendationBanner";
 
-// ─── Helpers ──────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────h
 
 function getTagTooltip(label: string, promptContribution: string) {
   return TAG_TOOLTIPS[label] || { short: promptContribution };
@@ -282,6 +282,7 @@ export default function Home() {
             imageBase64,
             mimeType: imageMime,
             useCaseInstruction: currentUseCase.geminiInstruction,
+            mode,
           }),
         });
         const data = await res.json();

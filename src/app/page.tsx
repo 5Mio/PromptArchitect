@@ -32,12 +32,12 @@ function TagWithTooltip({
       <button
         onClick={onClick}
         style={{
-          padding: "4px 11px", borderRadius: 20, fontSize: 11,
+          padding: "4px 11px", borderRadius: 20, fontSize: 12,
           overflow: "visible", margin: 4,
           fontFamily: "var(--font-mono)", cursor: "pointer", letterSpacing: "0.3px",
           border: `1px solid ${selected && recommended ? color : selected ? color : recommended ? `${color}80` : `${color}30`}`,
           background: selected && recommended ? `${color}30` : selected ? `${color}20` : recommended ? `${color}14` : `${color}08`,
-          color: selected ? color : recommended ? `${color}dd` : "#555",
+          color: selected ? color : recommended ? `${color}dd` : "#999",
           boxShadow: recommended ? `0 0 6px ${color}40` : "none",
           transition: "all 0.2s",
           animation: recommended ? "recTagGlow 2.5s ease-in-out infinite" : "none",
@@ -62,7 +62,7 @@ function SectionLabel({ color, children }: { color: string; children: string }) 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
       <span style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: 2.5, padding: "3px 10px",
+        fontSize: 10, fontWeight: 700, letterSpacing: 2.5, padding: "3px 10px",
         background: `${color}18`, color, borderRadius: 2,
         fontFamily: "var(--font-mono)", textTransform: "uppercase" as const,
       }}>{children}</span>
@@ -129,7 +129,7 @@ function LayerRow({ layerKey, label, value }: {
           textTransform: "uppercase" as const, letterSpacing: 1.5, paddingTop: 6,
         }}>{label}</span>
         <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 12, color: "#c8c4be",
+          fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text)",
           background: "var(--surface)", borderRadius: 5, padding: "6px 10px",
           border: "1px solid var(--border)", lineHeight: 1.6,
         }}>{value}</span>
@@ -180,8 +180,8 @@ function BreakdownRow({
       {/* Product-specific explanation */}
       <span style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 11.5,
-        color: "#a0a0a0",
+        fontSize: 12,
+        color: "#bbb",
         lineHeight: 1.65,
       }}>
         {explanation}
@@ -503,7 +503,7 @@ export default function Home() {
                   );
                 })}
               </div>
-              <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(255,77,0,0.04)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#666", lineHeight: 1.6 }}>
+              <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(255,77,0,0.04)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 11, color: "#999", lineHeight: 1.6 }}>
                 <span style={{ color: "var(--accent)" }}>►</span> {currentUseCase.description}
               </div>
               {/* ─── ANALYZE BUTTON — separate from generate ─── */}
@@ -586,7 +586,7 @@ export default function Home() {
                 {Object.entries(geminiAnalysis).slice(0, 5).map(([k, v]) => (
                   <div key={k} style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 8, marginBottom: 5 }}>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#4285f4", textTransform: "uppercase", letterSpacing: 1 }}>{k}</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#777", lineHeight: 1.5 }}>{String(v).slice(0, 120)}{String(v).length > 120 ? "…" : ""}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#999", lineHeight: 1.5 }}>{String(v).slice(0, 120)}{String(v).length > 120 ? "…" : ""}</span>
                   </div>
                 ))}
               </div>
@@ -600,7 +600,7 @@ export default function Home() {
               </div>
               <textarea rows={3} value={text} onChange={e => setText(e.target.value)}
                 placeholder="z.B. Fokus auf die Handwerkskunst, mysteriöse Atmosphäre, luxuriöse Wirkung..."
-                style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--border2)", borderRadius: 8, color: "#c8c4be", fontSize: 12.5, lineHeight: 1.8, padding: "12px 14px", resize: "none", transition: "all 0.2s" }}
+                style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--border2)", borderRadius: 8, color: "var(--text)", fontSize: 13, lineHeight: 1.8, padding: "12px 14px", resize: "none", transition: "all 0.2s" }}
               />
             </div>
 
@@ -617,7 +617,7 @@ export default function Home() {
                   <select value={tone} onChange={e => setTone(e.target.value)} style={{
                     width: "100%", appearance: "none", background: "var(--surface)",
                     border: `1px solid ${recommendations?.tone && tone !== recommendations.tone ? "rgba(255,77,0,0.4)" : "var(--border2)"}`,
-                    borderRadius: 6, color: "#c8c4be", fontSize: 11, padding: "9px 28px 9px 12px", cursor: "pointer",
+                    borderRadius: 6, color: "var(--text)", fontSize: 12, padding: "9px 28px 9px 12px", cursor: "pointer",
                   }}>
                     {[["luxury","Luxus / High-End"],["documentary","Dokumentarisch / Roh"],["editorial","Editorial / Fashion"],["dark","Dunkel / Dramatisch"],["artistic","Künstlerisch / Abstrakt"],["commercial","Kommerziell / Klar"]].map(([v, l]) => (
                       <option key={v} value={v}>{l}</option>
@@ -626,7 +626,7 @@ export default function Home() {
                   <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", fontSize: 10, pointerEvents: "none" }}>▾</span>
                 </div>
                 {TONE_TOOLTIPS[tone] && (
-                  <div style={{ marginTop: 6, padding: "6px 10px", background: "rgba(255,77,0,0.04)", border: "1px solid rgba(255,77,0,0.08)", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 10, color: "#555", lineHeight: 1.5 }}>
+                  <div style={{ marginTop: 6, padding: "6px 10px", background: "rgba(255,77,0,0.04)", border: "1px solid rgba(255,77,0,0.08)", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 10, color: "#999", lineHeight: 1.5 }}>
                     {TONE_TOOLTIPS[tone].short}
                   </div>
                 )}
@@ -644,7 +644,7 @@ export default function Home() {
                     <select value={duration} onChange={e => setDuration(e.target.value)} style={{
                       width: "100%", appearance: "none", background: "var(--surface)",
                       border: `1px solid ${recommendations?.duration && duration !== recommendations.duration ? "rgba(74,222,128,0.4)" : "var(--border2)"}`,
-                      borderRadius: 6, color: "#c8c4be", fontSize: 11, padding: "9px 28px 9px 12px", cursor: "pointer",
+                      borderRadius: 6, color: "var(--text)", fontSize: 12, padding: "9px 28px 9px 12px", cursor: "pointer",
                     }}>
                       {[["3","3 Sek — Micro"],["5","5 Sek — Standard"],["8","8 Sek — Hero Shot"],["15","15 Sek — Feature"]].map(([v, l]) => (
                         <option key={v} value={v}>{l}</option>
@@ -653,7 +653,7 @@ export default function Home() {
                     <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", fontSize: 10, pointerEvents: "none" }}>▾</span>
                   </div>
                   {DURATION_TOOLTIPS[duration] && (
-                    <div style={{ marginTop: 6, padding: "6px 10px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.08)", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 10, color: "#555", lineHeight: 1.5 }}>
+                    <div style={{ marginTop: 6, padding: "6px 10px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.08)", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 10, color: "#999", lineHeight: 1.5 }}>
                       {DURATION_TOOLTIPS[duration].short}
                     </div>
                   )}
@@ -768,8 +768,8 @@ export default function Home() {
             {!output && step === 0 && (
               <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center", opacity: 0.3 }}>
                 <div style={{ fontSize: 44 }}>◈</div>
-                <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 20, color: "#888" }}>Deine Vision wartet</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#555", lineHeight: 2 }}>
+                <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 20, color: "#aaa" }}>Deine Vision wartet</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#888", lineHeight: 2 }}>
                   Tags wählen → generieren → im Breakdown Tab<br />
                   siehst du wie jeder Tag konkret angewendet wurde
                 </div>
@@ -780,10 +780,10 @@ export default function Home() {
             {isLoading && !output && (
               <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20 }}>
                 <div style={{ fontSize: 36, animation: "pulse 1.2s infinite" }}>◈</div>
-                <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 18, color: "#555" }}>
+                <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 18, color: "#999" }}>
                   {step === 1 ? "Gemini liest dein Bild..." : "Claude erstellt den Prompt..."}
                 </div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#333", letterSpacing: 1, textAlign: "center", lineHeight: 1.8 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", letterSpacing: 1, textAlign: "center", lineHeight: 1.8 }}>
                   {step === 1 ? "Farben · Materialien · Licht · Details" : "Bild-Daten + Tags + Breakdown → Prompt"}
                 </div>
               </div>
@@ -833,7 +833,7 @@ export default function Home() {
                 {/* Ghost Director */}
                 {output.ghost_director && (
                   <Tooltip data={OUTPUT_TOOLTIPS["ghost_director"] || { short: "Unsichtbare Regie-Philosophie" }}>
-                    <div style={{ padding: "11px 15px", background: "rgba(255,77,0,0.03)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 8, fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 13, color: "#666", lineHeight: 1.7, cursor: "pointer" }}>
+                    <div style={{ padding: "11px 15px", background: "rgba(255,77,0,0.03)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 8, fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "#999", lineHeight: 1.7, cursor: "pointer" }}>
                       "{output.ghost_director}"
                     </div>
                   </Tooltip>
@@ -855,7 +855,7 @@ export default function Home() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     <div>
                       <SectionLabel color="var(--accent)">Haupt-Prompt (Englisch — Copy & Paste)</SectionLabel>
-                      <div style={{ background: "var(--surface)", border: "1px solid var(--border2)", borderLeft: "3px solid var(--accent)", borderRadius: 8, padding: "14px 16px", fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.9, color: "#c8c4be", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                      <div style={{ background: "var(--surface)", border: "1px solid var(--border2)", borderLeft: "3px solid var(--accent)", borderRadius: 8, padding: "14px 16px", fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.9, color: "var(--text)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                         {output.main_prompt}
                       </div>
                     </div>
@@ -888,7 +888,7 @@ export default function Home() {
                     {hasBreakdown ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {/* Intro note */}
-                        <div style={{ padding: "8px 12px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.08)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#555", lineHeight: 1.6, marginBottom: 4 }}>
+                        <div style={{ padding: "8px 12px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.08)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 11, color: "#999", lineHeight: 1.6, marginBottom: 4 }}>
                           Jeder Eintrag zeigt wie der Tag <em>spezifisch auf dieses Bild/Produkt</em> angewendet wurde — nicht die generische Definition.
                         </div>
 
@@ -956,7 +956,7 @@ export default function Home() {
                         {Object.entries(geminiAnalysis).map(([k, v]) => (
                           <div key={k} style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 10, alignItems: "start" }}>
                             <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#4285f4", textTransform: "uppercase", letterSpacing: 1.5, paddingTop: 6 }}>{k}</span>
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#888", background: "rgba(66,133,244,0.04)", borderRadius: 5, padding: "6px 10px", border: "1px solid rgba(66,133,244,0.1)", lineHeight: 1.6 }}>{v}</span>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#aaa", background: "rgba(66,133,244,0.04)", borderRadius: 5, padding: "6px 10px", border: "1px solid rgba(66,133,244,0.1)", lineHeight: 1.6 }}>{v}</span>
                           </div>
                         ))}
                       </div>

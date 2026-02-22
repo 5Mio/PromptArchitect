@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import {
-  USE_CASES, LIBRARY, VIDEO_TOOLS, IMAGE_TOOLS,
+  USE_CASES, LIBRARY, SCENE_LIBRARY, VIDEO_TOOLS, IMAGE_TOOLS,
   type Mode, type Step, type UseCaseId,
   type GeminiAnalysis, type PromptOutput,
 } from "@/lib/constants";
@@ -12,6 +12,16 @@ import {
   OUTPUT_TOOLTIPS, TAG_TOOLTIPS,
 } from "@/lib/tooltips";
 import { RecommendationBanner, type Recommendations } from "@/components/RecommendationBanner";
+
+// ─── Types ────────────────────────────────────────────────────
+
+interface SceneScenario {
+  id: string;
+  title: string;
+  scenario: string;
+  environment: string;
+  mood: string;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────h
 
@@ -227,6 +237,11 @@ export default function Home() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("prompt");
   const [copied, setCopied] = useState(false);
+  const [scenes, setScenes] = useState<SceneScenario[]>([]);
+  const [selectedScene, setSelectedScene] = useState<SceneScenario | null>(null);
+  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+  const [selectedSeeds, setSelectedSeeds] = useState<string[]>([]);
+  const [activeLibraryCategory, setActiveLibraryCategory] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const currentUseCase = USE_CASES.find(u => u.id === useCase)!;
@@ -242,6 +257,16 @@ export default function Home() {
       !e.useCases || e.useCases.includes(useCase as UseCaseId)
     ),
   })).filter(cat => cat.entries.length > 0);
+
+  const firstCategoryWithRecs = recommendations?.tags?.length
+    ? filteredLibrary.find(c => c.entries.some(e => recommendations.tags!.includes(e.label)))?.id ?? null
+    : null;
+
+  const activeCategoryId =
+    filteredLibrary.find(c => c.id === activeLibraryCategory)?.id
+    ?? firstCategoryWithRecs
+    ?? filteredLibrary[0]?.id
+    ?? null;
 
   const handleFile = useCallback((file: File) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -281,12 +306,39 @@ export default function Home() {
       if (data.recommendations) {
         setRecommendations(data.recommendations);
         applyRecommendations(data.recommendations);
+        setActiveLibraryCategory(null);
       }
       setGeminiDone(true);
     } catch (e: any) {
       setError(e.message || "Gemini Analyse fehlgeschlagen");
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const generateScenes = async () => {
+    setIsGeneratingScenes(true);
+    setScenes([]);
+    setSelectedScene(null);
+    try {
+      const res = await fetch("/api/scene-orchestrator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageAnalysis: geminiAnalysis || {},
+          useCase,
+          tone,
+          userText: text,
+          selectedSeeds,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setScenes(data.scenes || []);
+    } catch (e: any) {
+      setError(e.message || "Szenen-Generierung fehlgeschlagen");
+    } finally {
+      setIsGeneratingScenes(false);
     }
   };
 
@@ -332,7 +384,10 @@ export default function Home() {
         if (data.error) throw new Error(data.error);
         analysis = data.analysis;
         setGeminiAnalysis(analysis);
-        if (data.recommendations) setRecommendations(data.recommendations);
+        if (data.recommendations) {
+          setRecommendations(data.recommendations);
+          setActiveLibraryCategory(null);
+        }
       }
 
       setStep(2);
@@ -349,6 +404,9 @@ export default function Home() {
           mode,
           useCase,
           useCaseInstruction: currentUseCase.claudeInstruction,
+          sceneDirection: selectedScene
+            ? `Selected Scene: "${selectedScene.title}"\nScenario: ${selectedScene.scenario}\nEnvironment: ${selectedScene.environment}\nMood: ${selectedScene.mood}`
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -389,7 +447,7 @@ export default function Home() {
   const promptBreakdown = (output as any)?.prompt_breakdown as Record<string, string> | undefined;
   const hasBreakdown = promptBreakdown && Object.keys(promptBreakdown).length > 0;
   const canAnalyze = !!imageBase64 && !isAnalyzing && !isLoading;
-  const canGenerate = (!!imageBase64 || !!text.trim()) && !isLoading && !isAnalyzing;
+  const canGenerate = (!!imageBase64 || !!text.trim() || selectedSeeds.length > 0) && !isLoading && !isAnalyzing;
 
   // Tab list — breakdown tab only appears when we have data
   const tabs = [
@@ -681,10 +739,55 @@ export default function Home() {
                 </div>
               )}
 
-              {filteredLibrary.map(cat => (
-                <div key={cat.id} style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: cat.color + "80", marginBottom: 7, fontFamily: "var(--font-mono)" }}>{cat.label}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {/* Tab-Leiste */}
+              <div style={{ display: "flex", gap: 2, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+                {filteredLibrary.map(cat => {
+                  const isActive = cat.id === activeCategoryId;
+                  const selectedInCat = cat.entries.filter(e => selectedTags.includes(e.label)).length;
+                  const recommendedInCat = cat.entries.filter(e =>
+                    recommendations?.tags?.includes(e.label) && !selectedTags.includes(e.label)
+                  ).length;
+                  return (
+                    <button key={cat.id}
+                      onClick={() => setActiveLibraryCategory(cat.id)}
+                      style={{
+                        padding: "4px 10px", fontSize: 9, letterSpacing: 1.5,
+                        textTransform: "uppercase" as const, fontFamily: "var(--font-mono)",
+                        cursor: "pointer", whiteSpace: "nowrap" as const, border: "none",
+                        borderBottom: isActive ? `2px solid ${cat.color}` : "2px solid transparent",
+                        background: isActive ? `${cat.color}15` : "transparent",
+                        color: isActive ? cat.color : "var(--text-dim)",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {cat.label}
+                      {recommendedInCat > 0 && (
+                        <span style={{
+                          marginLeft: 5, fontSize: 8, background: "#ff4d00",
+                          color: "#fff", borderRadius: 8, padding: "1px 5px",
+                          animation: "recTagGlow 2s ease-in-out infinite",
+                        }}>
+                          {recommendedInCat}
+                        </span>
+                      )}
+                      {selectedInCat > 0 && (
+                        <span style={{
+                          marginLeft: recommendedInCat > 0 ? 3 : 5, fontSize: 8, background: cat.color,
+                          color: "#000", borderRadius: 8, padding: "1px 5px",
+                        }}>
+                          {selectedInCat}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tag-Inhalt der aktiven Kategorie */}
+              {filteredLibrary
+                .filter(cat => cat.id === activeCategoryId)
+                .map(cat => (
+                  <div key={cat.id} style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                     {cat.entries.map(entry => (
                       <TagWithTooltip
                         key={entry.label}
@@ -697,8 +800,130 @@ export default function Home() {
                       />
                     ))}
                   </div>
+                ))
+              }
+            </div>
+
+            {/* SCENE LIBRARY */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                <span style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" as const, color: "var(--text-dim)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>Scene Library</span>
+                <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--text-dim)", letterSpacing: 1 }}>Kombinierbar · steuert Szenen-Generierung</span>
+                {selectedSeeds.length > 0 && (
+                  <button onClick={() => setSelectedSeeds([])} style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", letterSpacing: 1 }}>
+                    LEEREN ({selectedSeeds.length})
+                  </button>
+                )}
+              </div>
+
+              {selectedSeeds.length > 0 && (
+                <div style={{ marginBottom: 10, padding: "6px 12px", background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#a78bfa", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 8, letterSpacing: 2, textTransform: "uppercase" as const }}>AKTIV</span>
+                  <span style={{ color: "#c8c4be" }}>{selectedSeeds.length} Seeds — steuern alle 6 Szenarien</span>
+                </div>
+              )}
+
+              {SCENE_LIBRARY.map(cat => (
+                <div key={cat.id} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" as const, color: cat.color + "80", marginBottom: 7, fontFamily: "var(--font-mono)" }}>{cat.label}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {cat.entries.map(entry => {
+                      const isSelected = selectedSeeds.includes(entry.label);
+                      return (
+                        <button
+                          key={entry.label}
+                          onClick={() => setSelectedSeeds(p => isSelected ? p.filter(x => x !== entry.label) : [...p, entry.label])}
+                          style={{
+                            padding: "4px 11px", borderRadius: 20, fontSize: 11, margin: 4,
+                            fontFamily: "var(--font-mono)", cursor: "pointer", letterSpacing: "0.3px",
+                            border: `1px solid ${isSelected ? cat.color : `${cat.color}30`}`,
+                            background: isSelected ? `${cat.color}20` : `${cat.color}08`,
+                            color: isSelected ? cat.color : "#555",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          {entry.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
+            </div>
+
+            {/* SCENE ORCHESTRATOR */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <span style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" as const, color: "var(--text-dim)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
+                  Szenen-Orchestrator
+                </span>
+                <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                {selectedScene && (
+                  <button
+                    onClick={() => setSelectedScene(null)}
+                    style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--accent)", background: "none", border: "none", cursor: "pointer", letterSpacing: 1 }}
+                  >
+                    SZENARIO ENTFERNEN
+                  </button>
+                )}
+              </div>
+
+              {selectedScene && (
+                <div style={{ marginBottom: 10, padding: "8px 12px", background: "rgba(255,77,0,0.08)", border: "1px solid rgba(255,77,0,0.3)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 8, letterSpacing: 2, textTransform: "uppercase" as const }}>AKTIV</span>
+                  <span style={{ color: "#c8c4be" }}>{selectedScene.title}</span>
+                </div>
+              )}
+
+              <button
+                onClick={generateScenes}
+                disabled={isGeneratingScenes || isLoading || (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0)}
+                style={{
+                  width: "100%", padding: "10px 0", marginBottom: scenes.length > 0 ? 12 : 0,
+                  background: isGeneratingScenes ? "rgba(255,77,0,0.08)" : (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0) ? "var(--surface)" : "rgba(255,77,0,0.1)",
+                  border: `1px solid ${isGeneratingScenes ? "var(--accent)" : (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0) ? "var(--border)" : "rgba(255,77,0,0.35)"}`,
+                  borderRadius: 6, cursor: (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0) || isGeneratingScenes ? "default" : "pointer",
+                  color: (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0) ? "var(--text-dim)" : "var(--accent)",
+                  fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 700,
+                  letterSpacing: 2, textTransform: "uppercase" as const, transition: "all 0.2s",
+                }}
+              >
+                {isGeneratingScenes
+                  ? <span style={{ animation: "pulse 1.2s infinite" }}>Szenarien werden generiert...</span>
+                  : scenes.length > 0 ? "Neue Szenarien generieren" : "Szenarien generieren →"}
+              </button>
+
+              {scenes.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {scenes.map(scene => {
+                    const isSelected = selectedScene?.id === scene.id;
+                    return (
+                      <button
+                        key={scene.id}
+                        onClick={() => setSelectedScene(isSelected ? null : scene)}
+                        style={{
+                          textAlign: "left" as const, padding: "12px 14px", borderRadius: 8,
+                          background: isSelected ? "rgba(255,77,0,0.1)" : "var(--surface)",
+                          border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                          cursor: "pointer", transition: "all 0.2s",
+                          boxShadow: isSelected ? "0 0 10px rgba(255,77,0,0.15)" : "none",
+                        }}
+                      >
+                        <div style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 700, color: isSelected ? "var(--accent)" : "#c8c4be", marginBottom: 5, letterSpacing: 0.3 }}>
+                          {scene.title}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#666", lineHeight: 1.55, marginBottom: 6, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
+                          {scene.scenario}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isSelected ? "rgba(255,77,0,0.7)" : "#444", letterSpacing: 0.5 }}>
+                          {scene.mood}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

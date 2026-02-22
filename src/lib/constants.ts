@@ -1080,3 +1080,155 @@ export interface PromptOutput {
   ghost_director: string;
   use_case_notes: string;
 }
+
+// ─── SCENE LIBRARY ────────────────────────────────────────────
+
+export interface SceneLibraryEntry {
+  label: string;
+  seed: string;
+}
+
+export interface SceneLibraryCategory {
+  id: string;
+  label: string;
+  color: string;
+  entries: SceneLibraryEntry[];
+}
+
+export const SCENE_LIBRARY: SceneLibraryCategory[] = [
+
+  // ══════════════════════════════════════════════════════════
+  // 01 — SCHAUPLATZ & SETTING (20 Einträge)
+  // ══════════════════════════════════════════════════════════
+  {
+    id: "location",
+    label: "Schauplatz & Setting",
+    color: "#ff4d00",
+    entries: [
+      { label: "Tokioter Seitenstraße", seed: "narrow Tokyo alleyway, lanterns overhead, cobblestones worn smooth, doors of unknown purpose" },
+      { label: "Isländische Lavafelder", seed: "Icelandic lava field, black volcanic rock, moss, vast flat horizon, otherworldly silence" },
+      { label: "Verlassenes Industriegebäude", seed: "abandoned industrial facility, broken skylights, rust and concrete, frozen in past time" },
+      { label: "Pariser Dachterrasse", seed: "Parisian rooftop at dusk, zinc rooftops extending to horizon, chimneys, soft city haze" },
+      { label: "Japanisches Ryokan", seed: "traditional Japanese ryokan interior, tatami, shoji screen light, minimalist wooden architecture" },
+      { label: "Berliner U-Bahnhof", seed: "Berlin subway station, brutalist tiles, fluorescent light flicker, late-night emptiness" },
+      { label: "Unterwasser-Grotte", seed: "underwater cave, light shafts from surface, suspended particles, deep marine silence" },
+      { label: "Marokkanischer Souk", seed: "Marrakech souk, spice colors, dappled light through woven roof, layered sensory world" },
+      { label: "Skandinavisches Fjord", seed: "Norwegian fjord at dawn, mirror-flat water, granite cliffs, pure cold light" },
+      { label: "Hongkonger Nachtmarkt", seed: "Hong Kong night market, vertical neon, steam from food stalls, compressed urban density" },
+      { label: "Arabische Altstadt", seed: "ancient Arab medina, whitewashed walls, geometry of shadows, timeless stone architecture" },
+      { label: "Russischer Winterwald", seed: "Russian birch forest in winter, white trunks, blue shadows on snow, absolute stillness" },
+      { label: "Futuristische Metropole", seed: "future city, aerial perspective, bioluminescent towers, rivers of light, vertical gardens" },
+      { label: "Mittelalterliche Bibliothek", seed: "medieval monastery library, candlelit manuscripts, dust motes in light shafts, centuries of knowledge" },
+      { label: "Brasilianische Favela", seed: "Brazilian favela hillside, dense color, makeshift architecture climbing upward, raw vitality" },
+      { label: "Australisches Outback", seed: "Australian outback, ochre earth, lone eucalyptus, heat shimmer, geological time" },
+      { label: "Venezianische Kanäle", seed: "Venice canals at fog, water reflections on palazzo walls, gondola oar sound, vanishing perspective" },
+      { label: "Leerer New Yorker Diner", seed: "empty New York diner at 3am, vinyl booths, counter stools, neon sign in window, isolation" },
+      { label: "Karibische Sandbank", seed: "Caribbean sandbar at low tide, shin-deep turquoise water, horizon 360°, total solitude" },
+      { label: "Tibetisches Kloster", seed: "Tibetan monastery on cliff edge, prayer flags, altitude light, ancient stone meeting clouds" },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // 02 — LICHTSTIMMUNG (20 Einträge)
+  // ══════════════════════════════════════════════════════════
+  {
+    id: "light",
+    label: "Lichtstimmung",
+    color: "#ffd166",
+    entries: [
+      { label: "Polarlicht-Nacht", seed: "aurora borealis, green and violet curtains across black sky, cold crystalline air, otherworldly color" },
+      { label: "Neon-Regen Reflexionen", seed: "rain-soaked street at night, neon signs bleeding color into wet asphalt, every puddle a painting" },
+      { label: "Goldene Stunde + Nebel", seed: "golden hour sunlight entering through morning mist, volumetric rays, warm against cool haze" },
+      { label: "Einzelne Kerze im Dunkel", seed: "single candle flame, absolute darkness surrounding, warm radius of 40cm, everything beyond void" },
+      { label: "Kaminfeuer-Wärme", seed: "fireplace light, dancing warm orange, deep shadow recession, crackling intimate glow" },
+      { label: "Biolumineszenz", seed: "bioluminescent ocean at night, blue light from within water, dark beach, natural electric beauty" },
+      { label: "Gewitter am Horizont", seed: "thunderstorm building on horizon, anvil cloud with internal lightning, ominous pre-storm light" },
+      { label: "Mondschatten Mitternacht", seed: "full moon casting hard shadows, silver light, deep black, no color — only luminance and void" },
+      { label: "Industrielles Flutlicht", seed: "industrial floodlight from single source, harsh directional shadows, theatrical contrast, factory scale" },
+      { label: "Magische Blaue Stunde", seed: "blue hour just after sunset, city lights activating, sky cobalt, world in transition between states" },
+      { label: "Unterwasser-Kaustik", seed: "underwater caustic light patterns, sunlight refracted through surface, shifting geometry of illumination" },
+      { label: "Gegenlicht-Silhouette", seed: "extreme backlight, subject as pure silhouette, rim light only, details dissolved by luminance" },
+      { label: "Regenwand-Fenster", seed: "rain streaming down window glass, interior light from behind, water as lens distorting outside world" },
+      { label: "Volcano-Glut", seed: "volcanic lava flow light, deep red-orange from below, smoke and heat shimmer, geological fire" },
+      { label: "Morgendunst-Strahlen", seed: "morning light shafts through forest canopy, dew on every surface, world just awakening" },
+      { label: "Glashaus-Diffusion", seed: "greenhouse diffused light, even soft illumination, green filter, life in suspended cultivation" },
+      { label: "Infrarot-Welt", seed: "infrared photography, foliage white as snow, sky black, a world reversed and made strange" },
+      { label: "Stroboskop-Freeze", seed: "stroboscopic light freezing motion, multiple exposure implied, time fractured and recomposed" },
+      { label: "Röntgen-Transparenz", seed: "x-ray aesthetic, internal structure visible, external appearance dissolved, truth beneath surface" },
+      { label: "Kerzen-Prozession", seed: "procession of candlelight, moving flames in darkness, warm points of light against profound black" },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // 03 — NARRATIVER MOMENT (15 Einträge)
+  // ══════════════════════════════════════════════════════════
+  {
+    id: "narrative",
+    label: "Narrativer Moment",
+    color: "#4ade80",
+    entries: [
+      { label: "Stille vor dem Sturm", seed: "the moment before everything changes, perfect stillness containing latent violence or transformation" },
+      { label: "Übergabe / Weitergabe", seed: "object passing from one hand to another, legacy transferred, chain of meaning continuing" },
+      { label: "Enthüllung im Nebel", seed: "something emerging from obscurity, the moment of recognition, revelation through gradual clarity" },
+      { label: "Letzter Blick zurück", seed: "departure moment, one final look at what is being left behind, threshold between before and after" },
+      { label: "Unbeobachteter Moment", seed: "subject unaware of camera, private authentic moment, the world seen without performance" },
+      { label: "Geheimnis wird aufgedeckt", seed: "hidden truth becoming visible, surface broken to reveal interior, concealment yielding to exposure" },
+      { label: "Zeitlos Eingefroren", seed: "motion stopped at apex, peak moment crystallized, before and after implied but absent" },
+      { label: "Triumph in Einsamkeit", seed: "victory without audience, private achievement in empty space, accomplishment without witness" },
+      { label: "Erste Begegnung", seed: "two elements meeting for first time, anticipation and discovery, the charged instant of first contact" },
+      { label: "Der leere Stuhl", seed: "an absence more present than presence, what was here and is gone, vacancy as narrative" },
+      { label: "Warten auf etwas", seed: "suspended anticipation, threshold state, time stretching before arrival of the expected" },
+      { label: "Das Unmögliche passiert", seed: "physical law suspended, impossible moment happening calmly, reality quietly broken" },
+      { label: "Zusammenbruch & Neubeginn", seed: "after the fall, ruins becoming foundation, destruction as prerequisite for what comes next" },
+      { label: "Parallele Welten treffen sich", seed: "two realities occupying same space, contradiction without resolution, coexistence of opposites" },
+      { label: "Abschied ohne Worte", seed: "farewell that cannot be spoken, emotion in gesture and distance, language exceeded by feeling" },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // 04 — ATMOSPHÄRE & EMOTION (15 Einträge)
+  // ══════════════════════════════════════════════════════════
+  {
+    id: "atmosphere",
+    label: "Atmosphäre & Emotion",
+    color: "#a78bfa",
+    entries: [
+      { label: "Sakral & Erhaben", seed: "sacred geometry, sublime scale, the individual small before something greater, reverence enforced by space" },
+      { label: "Melancholisch & Schwebend", seed: "bittersweet suspension, beauty tinged with impermanence, the ache of things almost within reach" },
+      { label: "Bedrohlich & Beunruhigend", seed: "threat implied not shown, wrongness in normal things, unease building without identifiable source" },
+      { label: "Mythisch & Archetypisch", seed: "primal story resonance, symbols older than language, archetype recognized before understood" },
+      { label: "Nostalgisch & Vergangen", seed: "memory texture, time distance, the specific weight of what was and cannot return" },
+      { label: "Ekstatisch & Grenzenlos", seed: "expansion beyond boundaries, joy that exceeds containment, body and spirit at maximum" },
+      { label: "Kontemplativ & Meditativ", seed: "thought made visible, the quality of deep attention, mind emptied and present to single thing" },
+      { label: "Sehnsüchtig & Unerreicht", seed: "desire for what cannot be touched, longing as its own landscape, the beautiful that stays distant" },
+      { label: "Bizarr & Absurd", seed: "logic inverted, the mundane made strange, rules suspended without drama, absurdity accepted" },
+      { label: "Traumhaft & Auflösend", seed: "dream physics, edges uncertain, transitions without cause, beauty in dissolution of order" },
+      { label: "Kalt & Emotionslos", seed: "clinical detachment, human warmth withheld, observation without judgment, sterile precision" },
+      { label: "Sinnlich & Körperlich", seed: "tactile reality, the body's intelligence, material world pressing on the senses" },
+      { label: "Rebellisch & Ungehorsam", seed: "refusal of expected, rule broken deliberately, beauty in transgression, the system subverted" },
+      { label: "Spielerisch & Verspielt", seed: "lightness of being, joy in absurdity, world as playground, gravity suspended by humor" },
+      { label: "Zeitlos & Unvergänglich", seed: "outside of time, permanent, immune to decay, the quality of things that will always have been" },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════
+  // 05 — REGISSEUR-PHILOSOPHIE (10 Einträge)
+  // ══════════════════════════════════════════════════════════
+  {
+    id: "director",
+    label: "Regisseur-Philosophie",
+    color: "#38bdf8",
+    entries: [
+      { label: "Kubrick Symmetrie", seed: "perfect bilateral symmetry, one-point perspective, mathematical frame composition, cold god's-eye geometry" },
+      { label: "Wong Kar-Wai Sehnsucht", seed: "blurred motion of time passing, longing encoded in light and color, memory as unstable material" },
+      { label: "Tarkovsky Zeit-Malerei", seed: "time as paintable substance, slow revelation, the frame as meditation, reality made numinous" },
+      { label: "Lynch Traumlogik", seed: "dream logic accepted without question, the uncanny in ordinary space, beauty in wrongness" },
+      { label: "Malick Natur-Kontemplation", seed: "nature as co-protagonist, light worshipped, whispered interior voice, world beyond human scale" },
+      { label: "Fincher Präzisions-Dunkel", seed: "meticulous darkness, every shadow placed, technical perfection serving psychological unease" },
+      { label: "Wes Anderson Diorama", seed: "flat symmetric framing, pastel palette precision, world as lovingly constructed dollhouse" },
+      { label: "Agnès Varda Poesie", seed: "tender observation, feminist gaze, the overlooked elevated, personal and political unified" },
+      { label: "Christopher Doyle Farbrausch", seed: "saturated impossible color, expressionist palette, emotion translated directly to hue" },
+      { label: "Sven Nykvist Licht-Demut", seed: "light as spiritual subject, no artifice, natural illumination honored, simplicity as highest form" },
+    ],
+  },
+];

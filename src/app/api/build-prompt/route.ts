@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       mode,
       useCase,
       useCaseInstruction,
+      sceneDirection,
     } = await req.json();
 
     // ─── INPUT VALIDATION ─────────────────────────────────────
@@ -124,7 +125,18 @@ SECTION C — USE CASE PRIORITY INSTRUCTIONS
 ══════════════════════════════════════════════
 ${useCaseInstruction || "Focus on product detail accuracy above all else."}
 
+${sceneDirection ? `══════════════════════════════════════════════
+SECTION G — SCENE DIRECTION (MANDATORY)
 ══════════════════════════════════════════════
+The user has selected a specific scene scenario. This is the creative foundation of the entire prompt.
+BUILD THE ENTIRE PROMPT AROUND THIS SCENARIO — it is not a suggestion, it is the directive.
+
+${sceneDirection}
+
+The world, motion, lighting, and intention layers MUST serve this scene.
+Do NOT default to generic product placement. The scene IS the prompt.
+
+` : ""}══════════════════════════════════════════════
 SECTION D — ABSOLUTE RULES (NEVER VIOLATE)
 ══════════════════════════════════════════════
 
@@ -219,7 +231,7 @@ LANGUAGE: All JSON values in English only.`;
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-3-5-sonnet-20240620",
+          model: "claude-sonnet-4-6",
           max_tokens: 3000,
           system,
           messages: [{ role: "user", content: context }],

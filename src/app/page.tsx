@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   USE_CASES, LIBRARY, SCENE_LIBRARY, VIDEO_TOOLS, IMAGE_TOOLS,
   type Mode, type Step, type UseCaseId,
@@ -23,10 +23,20 @@ interface SceneScenario {
   mood: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────h
+// ─── Helpers ──────────────────────────────────────────────────
 
 function getTagTooltip(label: string, promptContribution: string) {
   return TAG_TOOLTIPS[label] || { short: promptContribution };
+}
+
+function useTagColorMap() {
+  const map: Record<string, string> = {};
+  LIBRARY.forEach(cat => {
+    cat.entries.forEach(entry => {
+      map[entry.label] = cat.color;
+    });
+  });
+  return map;
 }
 
 // ─── Mini Components ──────────────────────────────────────────
@@ -37,67 +47,54 @@ function TagWithTooltip({
   label: string; color: string; selected: boolean; recommended: boolean;
   onClick: () => void; promptContribution: string;
 }) {
+  const borderColor = selected && recommended
+    ? color
+    : selected
+      ? color
+      : recommended
+        ? `${color}80`
+        : `${color}30`;
+
+  const bgColor = selected && recommended
+    ? `${color}30`
+    : selected
+      ? `${color}20`
+      : recommended
+        ? `${color}14`
+        : `${color}08`;
+
+  const textColor = selected ? color : recommended ? `${color}dd` : "var(--text-muted)";
+
   return (
     <Tooltip data={getTagTooltip(label, promptContribution)}>
       <button
         onClick={onClick}
+        aria-pressed={selected}
+        aria-label={`${label}${recommended ? " — KI-empfohlen" : ""}${selected ? " — ausgewählt" : ""}`}
+        className="tag-pill"
         style={{
-          padding: "4px 11px", borderRadius: 20, fontSize: 11,
-          overflow: "visible", margin: 4,
-          fontFamily: "var(--font-mono)", cursor: "pointer", letterSpacing: "0.3px",
-          border: `1px solid ${selected && recommended ? color : selected ? color : recommended ? `${color}80` : `${color}30`}`,
-          background: selected && recommended ? `${color}30` : selected ? `${color}20` : recommended ? `${color}14` : `${color}08`,
-          color: selected ? color : recommended ? `${color}dd` : "#555",
-          boxShadow: recommended ? `0 0 6px ${color}40` : "none",
-          transition: "all 0.2s",
+          border: `1px solid ${borderColor}`,
+          background: bgColor,
+          color: textColor,
+          boxShadow: recommended ? `0 0 5px ${color}35` : "none",
           animation: recommended ? "recTagGlow 2.5s ease-in-out infinite" : "none",
-          position: "relative",
+          margin: "3px",
         }}
       >
         {label}
         {recommended && (
-          <span style={{
-            position: "absolute", top: 0, right: 0,
-            width: 8, height: 8, borderRadius: "50%",
-            background: selected ? "var(--gold)" : "#ff4d00", boxShadow: selected ? "0 0 4px var(--gold)" : "0 0 4px #ff4d00",
-            animation: "recTagGlow 1.5s ease-in-out infinite",
-          }} />
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute", top: 0, right: 0,
+              width: 7, height: 7, borderRadius: "50%",
+              background: selected ? "var(--gold)" : "var(--accent)",
+              boxShadow: selected ? "0 0 4px var(--gold)" : "0 0 4px var(--accent)",
+            }}
+          />
         )}
       </button>
     </Tooltip>
-  );
-}
-
-function SectionLabel({ color, children }: { color: string; children: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-      <span style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: 2.5, padding: "3px 10px",
-        background: `${color}18`, color, borderRadius: 2,
-        fontFamily: "var(--font-mono)", textTransform: "uppercase" as const,
-      }}>{children}</span>
-      <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-    </div>
-  );
-}
-
-function StepBadge({ num, label, status }: {
-  num: string; label: string; status: "idle" | "active" | "done";
-}) {
-  const c = { idle: "#2a2a2a", active: "#ff4d00", done: "#4ade80" }[status];
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-      <div style={{
-        width: 20, height: 20, borderRadius: "50%", border: `2px solid ${c}`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 9, fontWeight: 700, color: c, fontFamily: "var(--font-mono)",
-        background: status === "active" ? "rgba(255,77,0,0.1)" : "transparent",
-        transition: "all 0.3s",
-      }}>{status === "done" ? "✓" : num}</div>
-      <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: c, letterSpacing: 1 }}>
-        {label}
-      </span>
-    </div>
   );
 }
 
@@ -106,23 +103,36 @@ function ScoreBar({ label, value, color, tooltipKey }: {
 }) {
   return (
     <Tooltip data={OUTPUT_TOOLTIPS[tooltipKey] || { short: label }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 12, padding: "9px 14px",
-        background: "var(--surface)", borderRadius: 7, border: "1px solid var(--border)",
-        cursor: "pointer",
-      }}>
-        <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 2,
-          textTransform: "uppercase" as const, color: "var(--text-dim)",
-          whiteSpace: "nowrap", minWidth: 110,
-        }}>{label}</span>
-        <div style={{ flex: 1, height: 3, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
-          <div style={{ width: `${value}%`, height: "100%", background: color, borderRadius: 2, transition: "width 1.2s ease" }} />
+      <div
+        className="flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer"
+        style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+      >
+        <span
+          className="text-[10px] uppercase tracking-widest whitespace-nowrap"
+          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)", minWidth: 110 }}
+        >
+          {label}
+        </span>
+        <div
+          role="progressbar"
+          aria-valuenow={value}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${label}: ${value}%`}
+          className="flex-1 h-[3px] rounded-full overflow-hidden"
+          style={{ background: "var(--surface3)" }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-1000"
+            style={{ width: `${value}%`, background: color }}
+          />
         </div>
-        <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500,
-          color, minWidth: 40, textAlign: "right" as const,
-        }}>{value}%</span>
+        <span
+          className="text-[13px] font-medium text-right"
+          style={{ fontFamily: "var(--font-mono)", color, minWidth: 40 }}
+        >
+          {value}%
+        </span>
       </div>
     </Tooltip>
   );
@@ -133,84 +143,189 @@ function LayerRow({ layerKey, label, value }: {
 }) {
   return (
     <Tooltip data={OUTPUT_TOOLTIPS[layerKey] || { short: label }}>
-      <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 10, alignItems: "start", cursor: "pointer" }}>
-        <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)",
-          textTransform: "uppercase" as const, letterSpacing: 1.5, paddingTop: 6,
-        }}>{label}</span>
-        <span style={{
-          fontFamily: "var(--font-mono)", fontSize: 12, color: "#c8c4be",
-          background: "var(--surface)", borderRadius: 5, padding: "6px 10px",
-          border: "1px solid var(--border)", lineHeight: 1.6,
-        }}>{value}</span>
+      <div className="layer-row cursor-pointer">
+        <span
+          className="text-[9px] uppercase tracking-widest pt-1.5"
+          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+        >
+          {label}
+        </span>
+        <span
+          className="text-[12px] leading-relaxed rounded-md px-3 py-1.5 border"
+          style={{
+            fontFamily: "var(--font-mono)",
+            color: "#C8C4BE",
+            background: "var(--surface)",
+            borderColor: "var(--border)",
+          }}
+        >
+          {value}
+        </span>
       </div>
     </Tooltip>
   );
 }
 
-// ─── Breakdown Row ────────────────────────────────────────────
-// New component: shows one tag + its product-specific explanation
-
-function BreakdownRow({
-  tagLabel,
-  explanation,
-  tagColor,
-}: {
-  tagLabel: string;
-  explanation: string;
-  tagColor: string;
+function BreakdownRow({ tagLabel, explanation, tagColor }: {
+  tagLabel: string; explanation: string; tagColor: string;
 }) {
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "auto 1fr",
-      gap: 12,
-      padding: "10px 14px",
-      background: "var(--surface)",
-      border: `1px solid var(--border)`,
-      borderLeft: `3px solid ${tagColor}`,
-      borderRadius: 7,
-      alignItems: "start",
-    }}>
-      {/* Tag label pill */}
-      <span style={{
-        padding: "3px 10px",
-        borderRadius: 20,
-        fontSize: 10,
-        fontFamily: "var(--font-mono)",
-        letterSpacing: "0.3px",
-        border: `1px solid ${tagColor}50`,
-        background: `${tagColor}12`,
-        color: tagColor,
-        whiteSpace: "nowrap",
-        marginTop: 1,
-      }}>
+    <div
+      className="breakdown-row"
+      style={{ borderLeft: `3px solid ${tagColor}`, borderColor: "var(--border)" }}
+    >
+      <span
+        className="text-[10px] rounded-full px-2.5 py-1 whitespace-nowrap"
+        style={{
+          fontFamily: "var(--font-mono)",
+          border: `1px solid ${tagColor}50`,
+          background: `${tagColor}12`,
+          color: tagColor,
+        }}
+      >
         {tagLabel}
       </span>
-      {/* Product-specific explanation */}
-      <span style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 11.5,
-        color: "#a0a0a0",
-        lineHeight: 1.65,
-      }}>
+      <span
+        className="text-[11.5px] leading-relaxed"
+        style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}
+      >
         {explanation}
       </span>
     </div>
   );
 }
 
-// ─── Category color lookup ────────────────────────────────────
-// Maps a tag label back to its category color for the breakdown display
+// ─── Library Tab Scroller ─────────────────────────────────────
 
-function useTagColorMap() {
-  const map: Record<string, string> = {};
-  LIBRARY.forEach(cat => {
-    cat.entries.forEach(entry => {
-      map[entry.label] = cat.color;
-    });
-  });
-  return map;
+function LibraryTabScroller({ children }: { children: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
+
+    if (scrollWidth > clientWidth) {
+      setScrollProgress((scrollLeft / (scrollWidth - clientWidth)) * 100);
+    } else {
+      setScrollProgress(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    checkScroll();
+    el.addEventListener("scroll", checkScroll, { passive: true });
+    const ro = new ResizeObserver(checkScroll);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", checkScroll); ro.disconnect(); };
+  }, [checkScroll]);
+
+  const scroll = (dir: "left" | "right") => {
+    scrollRef.current?.scrollBy({ left: dir === "left" ? -160 : 160, behavior: "smooth" });
+  };
+
+  const onSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const value = parseFloat(e.target.value);
+    const targetScroll = (value / 100) * (el.scrollWidth - el.clientWidth);
+    el.scrollLeft = targetScroll;
+  };
+
+  const hasOverflow = canScrollLeft || canScrollRight;
+
+  return (
+    <div className="flex flex-col gap-2 mb-4">
+      <div className="relative group">
+        {/* Left arrow */}
+        {canScrollLeft && (
+          <button
+            onClick={() => scroll("left")}
+            aria-label="Kategorien nach links scrollen"
+            className="absolute left-0 top-0 bottom-0 z-10 flex items-center px-2 transition-opacity duration-200"
+            style={{
+              background: "linear-gradient(to right, var(--surface) 40%, transparent)",
+              border: "none", cursor: "pointer", color: "var(--accent)",
+              fontSize: 18, fontWeight: "bold",
+            }}
+          >
+            ‹
+          </button>
+        )}
+
+        {/* Scrollable tabs */}
+        <div
+          ref={scrollRef}
+          role="tablist"
+          aria-label="Orchestra Library Kategorien"
+          className="lib-scroll-area"
+          style={{
+            display: "flex",
+            overflowX: "auto",
+            scrollbarWidth: "auto",
+            paddingBottom: "4px",
+            paddingLeft: canScrollLeft ? 24 : 0,
+            paddingRight: canScrollRight ? 24 : 0,
+          }}
+        >
+          {children}
+        </div>
+
+        {/* Right arrow */}
+        {canScrollRight && (
+          <button
+            onClick={() => scroll("right")}
+            aria-label="Kategorien nach rechts scrollen"
+            className="absolute right-0 top-0 bottom-0 z-10 flex items-center px-2 transition-opacity duration-200"
+            style={{
+              background: "linear-gradient(to left, var(--surface) 40%, transparent)",
+              border: "none", cursor: "pointer", color: "var(--accent)",
+              fontSize: 18, fontWeight: "bold",
+            }}
+          >
+            ›
+          </button>
+        )}
+      </div>
+
+      {/* The "Schieberegler" (Slider) for better accessibility */}
+      {hasOverflow && (
+        <div className="px-2 flex items-center gap-3">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="0.1"
+            value={scrollProgress}
+            onChange={onSliderChange}
+            className="category-slider"
+            aria-label="Kategorien Schieberegler"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionDivider({ label, color }: { label: string; color: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <span
+        className="text-[9px] uppercase tracking-widest whitespace-nowrap font-medium"
+        style={{ fontFamily: "var(--font-mono)", color: `${color}99` }}
+      >
+        {label}
+      </span>
+      <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+    </div>
+  );
 }
 
 // ─── Main App ─────────────────────────────────────────────────
@@ -231,17 +346,32 @@ export default function Home() {
   const [geminiAnalysis, setGeminiAnalysis] = useState<GeminiAnalysis | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [recDismissed, setRecDismissed] = useState(false);
-  const [geminiDone, setGeminiDone] = useState(false);  // true after analyze-only run
-  const [isAnalyzing, setIsAnalyzing] = useState(false); // spinner for analyze button
+  const [geminiDone, setGeminiDone] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [output, setOutput] = useState<PromptOutput | null>(null);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("prompt");
+  const [activeTab, setActiveTab] = useState<string>("prompt");
   const [copied, setCopied] = useState(false);
   const [scenes, setScenes] = useState<SceneScenario[]>([]);
   const [selectedScene, setSelectedScene] = useState<SceneScenario | null>(null);
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
   const [selectedSeeds, setSelectedSeeds] = useState<string[]>([]);
   const [activeLibraryCategory, setActiveLibraryCategory] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
+
+  // Debugging-Hilfe
+  useEffect(() => {
+    (window as any).forceGenerate = () => {
+      console.log("[DEBUG] Force trigger manual generation");
+      if (output?.main_prompt) {
+        generatePreviews(output.main_prompt, output.layers);
+      } else {
+        console.error("[DEBUG] No output available");
+      }
+    };
+    console.log("[DEBUG] window.forceGenerate initialized");
+  }, [output]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const currentUseCase = USE_CASES.find(u => u.id === useCase)!;
@@ -280,7 +410,6 @@ export default function Home() {
     reader.readAsDataURL(file);
   }, []);
 
-  // ─── Analyze-only: Gemini vision + tag recommendations, no Claude ───────────
   const analyzeOnly = async () => {
     if (!imageBase64) return;
     setError("");
@@ -290,18 +419,21 @@ export default function Home() {
     setRecDismissed(false);
     setGeminiAnalysis(null);
     try {
+      console.log("[analyze] Image Base64 length:", imageBase64.length, "bytes");
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageBase64,
-          mimeType: imageMime,
-          useCaseInstruction: currentUseCase.geminiInstruction,
-          mode,
+          imageBase64, mimeType: imageMime,
+          useCaseInstruction: currentUseCase.geminiInstruction, mode,
         }),
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        console.error("Server API Error Details:", data);
+        throw new Error(data.error);
+      }
+
       setGeminiAnalysis(data.analysis);
       if (data.recommendations) {
         setRecommendations(data.recommendations);
@@ -326,10 +458,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageAnalysis: geminiAnalysis || {},
-          useCase,
-          tone,
-          userText: text,
-          selectedSeeds,
+          useCase, tone, userText: text, selectedSeeds,
         }),
       });
       const data = await res.json();
@@ -342,6 +471,72 @@ export default function Home() {
     }
   };
 
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const addToLog = (msg: string) => setDebugLog(p => [...p.slice(-9), `> ${msg}`]);
+
+  const generatePreviews = async (mainPrompt: string, layers: any) => {
+    console.log("[generatePreviews] Starting...", { mainPrompt: mainPrompt.slice(0, 30), hasLayers: !!layers });
+    const imgLen = imageBase64?.length || 0;
+    addToLog(`Start Preview (Image: ${imgLen} bytes)`);
+    setIsGeneratingPreviews(true);
+    setPreviews([]);
+    setError(""); // Fehler zurücksetzen
+    try {
+      const visualizationPrompts = [mainPrompt];
+      if (scenes.length > 0) {
+        scenes.slice(0, 4).forEach(s => {
+          visualizationPrompts.push(`Visual representation of this scene: ${s.scenario}. Based on the style: ${mainPrompt}`);
+        });
+      }
+      addToLog(`Prompts: ${visualizationPrompts.length}`);
+
+      const res = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompts: visualizationPrompts,
+          imageBase64: imageBase64
+        }),
+      });
+      addToLog(`API Status: ${res.status}`);
+      const data = await res.json();
+      console.log("[generatePreviews] API Response:", data);
+
+      if (data.error) {
+        addToLog(`API-Fehler: ${data.error}`);
+        throw new Error(data.error);
+      }
+
+      const errors = (data.results || [])
+        .filter((r: any) => r.error)
+        .map((r: any) => r.error);
+
+      if (errors.length > 0) {
+        console.warn("[generatePreviews] Some prompts failed:", errors);
+        addToLog(`X-Fehler: ${errors[0]}`);
+      }
+
+      const successfulImages = (data.results || [])
+        .filter((r: any) => !r.error)
+        .map((r: any) => r.url);
+
+      console.log("[generatePreviews] Final Results:", { count: successfulImages.length, errors });
+      addToLog(`Bilder: ${successfulImages.length}`);
+      setPreviews(successfulImages);
+      if (successfulImages.length === 0) {
+        setError("Keine Bilder generiert. Eventuell API-Limit oder Safety Block?");
+      }
+    } catch (e: any) {
+      console.error("[generatePreviews] Error:", e);
+      addToLog(`Error: ${e.message}`);
+      setError("Vorschau-Generierung fehlgeschlagen: " + e.message);
+    } finally {
+      setIsGeneratingPreviews(false);
+      addToLog("Fertig.");
+      console.log("[generatePreviews] Finished.");
+    }
+  };
+
   const generate = async () => {
     if (!imageBase64 && !text.trim()) return;
     setError("");
@@ -350,23 +545,13 @@ export default function Home() {
     setRecommendations(null);
     setRecDismissed(false);
 
-    // Snapshot at generation time
-    const snapshotTagContributions = LIBRARY
-      .flatMap(cat => cat.entries)
-      .filter(e => selectedTags.includes(e.label))
-      .map(e => e.promptContribution);
-
-    // Keep same order as selectedTags
     const orderedContributions = selectedTags.map(label => {
       const entry = LIBRARY.flatMap(c => c.entries).find(e => e.label === label);
       return entry?.promptContribution || "";
     });
 
     try {
-      // If analyzeOnly was already run, reuse stored analysis — skip Gemini call
-      let analysis: GeminiAnalysis | null = geminiDone
-        ? (geminiAnalysis as GeminiAnalysis | null)
-        : null;
+      let analysis: GeminiAnalysis | null = geminiDone ? (geminiAnalysis as GeminiAnalysis | null) : null;
 
       if (imageBase64 && !geminiDone) {
         setStep(1);
@@ -374,10 +559,8 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            imageBase64,
-            mimeType: imageMime,
-            useCaseInstruction: currentUseCase.geminiInstruction,
-            mode,
+            imageBase64, mimeType: imageMime,
+            useCaseInstruction: currentUseCase.geminiInstruction, mode,
           }),
         });
         const data = await res.json();
@@ -397,12 +580,9 @@ export default function Home() {
         body: JSON.stringify({
           imageAnalysis: analysis || {},
           userText: text,
-          tags: selectedTags,               // labels in selection order
-          tagContributions: orderedContributions, // matched by index
-          tone,
-          duration,
-          mode,
-          useCase,
+          tags: selectedTags,
+          tagContributions: orderedContributions,
+          tone, duration, mode, useCase,
           useCaseInstruction: currentUseCase.claudeInstruction,
           sceneDirection: selectedScene
             ? `Selected Scene: "${selectedScene.title}"\nScenario: ${selectedScene.scenario}\nEnvironment: ${selectedScene.environment}\nMood: ${selectedScene.mood}`
@@ -414,6 +594,11 @@ export default function Home() {
       setOutput(data.prompt);
       setStep(3);
       setActiveTab("prompt");
+
+      // Automatische Vorschau-Generierung nach dem Prompt-Build
+      if (data.prompt?.main_prompt) {
+        generatePreviews(data.prompt.main_prompt, data.prompt.layers);
+      }
     } catch (e: any) {
       setError(e.message);
       setStep(0);
@@ -440,158 +625,228 @@ export default function Home() {
 
   const tools = mode === "video" ? VIDEO_TOOLS : IMAGE_TOOLS;
   const qScore = output?.quality_score || 0;
-  const qColor = qScore >= 92 ? "#4ade80" : qScore >= 82 ? "#ffd166" : "#ff6464";
+  const qColor = qScore >= 92 ? "var(--green)" : qScore >= 82 ? "var(--gold)" : "#F87171";
   const dScore = output?.detail_accuracy || 0;
-  const dColor = dScore >= 90 ? "#4ade80" : dScore >= 75 ? "#ffd166" : "#ff6464";
+  const dColor = dScore >= 90 ? "var(--green)" : dScore >= 75 ? "var(--gold)" : "#F87171";
   const tagsIntegrated = (output as any)?.tags_integrated as number | undefined;
   const promptBreakdown = (output as any)?.prompt_breakdown as Record<string, string> | undefined;
   const hasBreakdown = promptBreakdown && Object.keys(promptBreakdown).length > 0;
   const canAnalyze = !!imageBase64 && !isAnalyzing && !isLoading;
   const canGenerate = (!!imageBase64 || !!text.trim() || selectedSeeds.length > 0) && !isLoading && !isAnalyzing;
 
-  // Tab list — breakdown tab only appears when we have data
   const tabs = [
     { id: "prompt", label: "Prompt" },
+    { id: "preview", label: "Vorschau" },
     { id: "breakdown", label: `Breakdown${hasBreakdown ? ` (${Object.keys(promptBreakdown!).length})` : ""}` },
     { id: "layers", label: "Ebenen" },
     { id: "tools", label: "Tools" },
     { id: "analyse", label: "Rohdaten" },
   ];
 
-  return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <style>{`
-        @keyframes tooltipFade {
-          from { opacity: 0; transform: translateY(4px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-        @keyframes slide { 0%{left:-60%} 100%{left:120%} }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes recBannerIn {
-          from { opacity: 0; transform: translateY(-10px) scale(0.98); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes recTagGlow {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,0,0.5); }
-          50%       { box-shadow: 0 0 8px 2px rgba(255,77,0,0.2); }
-        }
-        @keyframes usecaseGlow {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,0,0.4); }
-          50%       { box-shadow: 0 0 12px 3px rgba(255,77,0,0.15); }
-        }
-      `}</style>
+  // ─── Render ───────────────────────────────────────────────────
 
-      {/* ── HEADER ── */}
-      <header style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "13px 28px", borderBottom: "1px solid var(--border)",
-        background: "rgba(8,8,8,0.97)", backdropFilter: "blur(20px)",
-        position: "sticky", top: 0, zIndex: 100,
-      }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.5 }}>PromptArchitect</span>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 3, color: "var(--accent)", padding: "3px 8px", border: "1px solid var(--accent)", borderRadius: 2 }}>PRO v5.1</span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-dim)", marginLeft: 6 }}>by AIJantaStack</span>
+  return (
+    <div
+      className="flex flex-col"
+      style={{ height: "100vh", background: "var(--bg)", overflow: "hidden" }}
+      role="application"
+      aria-label="PromptArchitect Pro"
+    >
+
+      {/* ── HEADER ────────────────────────────────────────────── */}
+      <header
+        className="flex items-center justify-between px-6 h-14 sticky top-0 z-50"
+        style={{
+          borderBottom: "1px solid var(--border)",
+          background: "rgba(12,12,14,0.95)",
+          backdropFilter: "blur(20px)",
+        }}
+      >
+        {/* Logo */}
+        <div className="flex items-baseline gap-2.5">
+          <span
+            className="text-[16px] font-bold tracking-tight"
+            style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}
+          >
+            PromptArchitect
+          </span>
+          <span
+            className="text-[9px] font-medium tracking-widest px-2 py-0.5 rounded"
+            style={{
+              fontFamily: "var(--font-mono)",
+              color: "var(--accent)",
+              border: "1px solid rgba(255,77,0,0.35)",
+              background: "rgba(255,77,0,0.06)",
+            }}
+          >
+            PRO
+          </span>
+          <span
+            className="text-[10px] ml-1"
+            style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+          >
+            by AIJantaStack
+          </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 14px", background: "var(--surface)", borderRadius: 6, border: "1px solid var(--border)" }}>
-            <StepBadge num="1" label="Gemini Vision" status={step === 0 ? "idle" : step === 1 ? "active" : "done"} />
-            <div style={{ width: 16, height: 1, background: "var(--border2)" }} />
-            <StepBadge num="2" label="Claude Architect" status={step < 2 ? "idle" : step === 2 ? "active" : "done"} />
+
+        {/* Right controls */}
+        <div className="flex items-center gap-3">
+          {/* Pipeline status */}
+          <div
+            className="flex items-center gap-3 px-3 py-1.5 rounded-lg"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <PipelineDot
+              label="Gemini"
+              status={step === 0 ? "idle" : step === 1 ? "active" : "done"}
+              activeColor="var(--blue)"
+            />
+            <div className="w-4 h-px" style={{ background: "var(--border2)" }} />
+            <PipelineDot
+              label="Claude"
+              status={step < 2 ? "idle" : step === 2 ? "active" : "done"}
+              activeColor="var(--accent)"
+            />
           </div>
-          <div style={{ display: "flex", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: 3, gap: 2 }}>
+
+          {/* Mode toggle */}
+          <div
+            className="flex p-0.5 rounded-lg gap-0.5"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
             {(["video", "image"] as Mode[]).map(m => (
-              <button key={m} onClick={() => setMode(m)} style={{
-                padding: "6px 14px", fontSize: 11, fontWeight: 700, letterSpacing: 1,
-                textTransform: "uppercase", border: "none", borderRadius: 4, cursor: "pointer",
-                fontFamily: "var(--font-display)", transition: "all 0.2s",
-                background: mode === m ? (m === "video" ? "var(--accent)" : "var(--gold)") : "transparent",
-                color: mode === m ? (m === "video" ? "white" : "#000") : "var(--text-muted)",
-              }}>{m === "video" ? "▶ Video" : "◼ Bild"}</button>
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                aria-pressed={mode === m}
+                aria-label={m === "video" ? "Video-Modus" : "Bild-Modus"}
+                className="px-3.5 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wider transition-all duration-200"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  background: mode === m
+                    ? (m === "video" ? "var(--accent)" : "var(--gold)")
+                    : "transparent",
+                  color: mode === m
+                    ? (m === "video" ? "#fff" : "#000")
+                    : "var(--text-muted)",
+                  cursor: "pointer",
+                  border: "none",
+                }}
+              >
+                {m === "video" ? "▶ Video" : "◼ Bild"}
+              </button>
             ))}
           </div>
         </div>
       </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", flex: 1, minHeight: "calc(100vh - 55px)" }}>
+      {/* ── MAIN LAYOUT ───────────────────────────────────────── */}
+      <div
+        id="main-content"
+        className="flex flex-1"
+        style={{ overflow: "hidden", minWidth: 0 }}
+      >
 
-        {/* ── LEFT: INPUT ── */}
-        <div style={{ borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-          <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* ═══════════════════════════════════════════════════════
+            INPUT SIDEBAR (fixed 420px)
+        ═══════════════════════════════════════════════════════ */}
+        <aside
+          className="flex flex-col"
+          style={{
+            flex: "1 1 0",
+            minWidth: 0,
+            overflow: "hidden",
+            borderRight: "1px solid var(--border)",
+            background: "var(--bg)",
+          }}
+        >
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
 
-            {/* USE CASE SELECTOR */}
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
+            {/* ① USE CASE */}
+            <div className="card p-4">
+              <div className="section-label mb-3">
+                <span className="section-label-dot" style={{ background: "var(--accent)" }} />
                 Verwendungszweck
-                <span style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: 1 }}>— Hover für Info · Klick für Details</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+              <div className="grid grid-cols-4 gap-1.5">
                 {USE_CASES.map(uc => {
                   const isRec = recommendations?.use_case === uc.id;
+                  const isSelected = useCase === uc.id;
                   return (
                     <Tooltip key={uc.id} data={USE_CASE_TOOLTIPS[uc.id] || { short: uc.description }}>
                       <button
                         onClick={() => { setUseCase(uc.id); setSelectedTags([]); }}
-                        style={{
-                          padding: "8px 6px", width: "100%",
-                          border: `1px solid ${useCase === uc.id ? "var(--accent)" : isRec ? "rgba(255,77,0,0.5)" : "var(--border)"}`,
-                          borderRadius: 7,
-                          background: useCase === uc.id ? "rgba(255,77,0,0.1)" : isRec ? "rgba(255,77,0,0.06)" : "var(--surface)",
-                          cursor: "pointer", textAlign: "center", transition: "all 0.2s",
-                          animation: isRec && useCase !== uc.id ? "usecaseGlow 2s ease-in-out infinite" : "none",
-                          position: "relative",
-                        }}
+                        className={`usecase-btn${isSelected ? " selected" : ""}${isRec && !isSelected ? " ai-rec" : ""}`}
+                        style={{ position: "relative" }}
                       >
-                        {isRec && useCase !== uc.id && (
-                          <span style={{
-                            position: "absolute", top: -4, right: -4,
-                            background: "#ff4d00", color: "white",
-                            fontSize: 7, fontFamily: "var(--font-mono)", letterSpacing: 1,
-                            padding: "1px 4px", borderRadius: 3, fontWeight: 700,
-                          }}>AI</span>
+                        {isRec && !isSelected && (
+                          <span
+                            className="absolute -top-1.5 -right-1.5 text-[7px] font-bold px-1 py-0.5 rounded"
+                            style={{
+                              fontFamily: "var(--font-mono)",
+                              background: "var(--accent)",
+                              color: "#fff",
+                              letterSpacing: "0.05em",
+                            }}
+                          >
+                            AI
+                          </span>
                         )}
-                        <div style={{ fontSize: 14, marginBottom: 3 }}>{uc.icon}</div>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: useCase === uc.id ? "var(--accent)" : isRec ? "#ff6622" : "var(--text-muted)", fontFamily: "var(--font-display)" }}>
+                        <span className="text-[14px]" aria-hidden="true">{uc.icon}</span>
+                        <span
+                          className="text-[9px] font-semibold uppercase tracking-wide leading-tight text-center"
+                          style={{ fontFamily: "var(--font-display)" }}
+                        >
                           {uc.label}
-                        </div>
+                        </span>
                       </button>
                     </Tooltip>
                   );
                 })}
               </div>
-              <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(255,77,0,0.04)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#666", lineHeight: 1.6 }}>
-                <span style={{ color: "var(--accent)" }}>►</span> {currentUseCase.description}
+
+              {/* Use case hint */}
+              <div
+                className="mt-2.5 px-3 py-2 rounded-md text-[11px] leading-relaxed"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  background: "rgba(255,77,0,0.04)",
+                  border: "1px solid rgba(255,77,0,0.08)",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <span style={{ color: "var(--accent)" }}>► </span>
+                {currentUseCase.description}
               </div>
-              {/* ─── ANALYZE BUTTON — separate from generate ─── */}
+
+              {/* Analyze button */}
               {imageBase64 && (
-                <div style={{ marginTop: 10 }}>
-                  <button
-                    onClick={analyzeOnly}
-                    disabled={!canAnalyze}
-                    style={{
-                      width: "100%", padding: "10px 0",
-                      background: geminiDone ? "rgba(212,175,55,0.12)" : canAnalyze ? "rgba(66,133,244,0.15)" : "var(--surface)",
-                      border: geminiDone ? "1px solid var(--gold)" : canAnalyze ? "1px solid #4285f4" : "1px solid var(--border)",
-                      borderRadius: 6, cursor: canAnalyze ? "pointer" : "default",
-                      color: geminiDone ? "var(--gold)" : canAnalyze ? "#4285f4" : "var(--text-dim)",
-                      fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 700,
-                      letterSpacing: 2, textTransform: "uppercase",
-                      transition: "all 0.2s",
-                    }}
-                  >
-                    {isAnalyzing
-                      ? <span style={{ animation: "pulse 1.2s infinite" }}>① Gemini analysiert Tags…</span>
-                      : geminiDone
-                        ? "✓ Tags analysiert — erneut analysieren"
-                        : "◎ Tags analysieren →"}
-                  </button>
-                </div>
+                <button
+                  onClick={analyzeOnly}
+                  disabled={!canAnalyze && !geminiDone}
+                  className={`btn-analyze mt-3${isAnalyzing ? " loading" : geminiDone ? " done" : canAnalyze ? " ready" : ""}`}
+                >
+                  {isAnalyzing ? (
+                    <span style={{ animation: "pulse 1.2s infinite" }}>
+                      Gemini analysiert Tags…
+                    </span>
+                  ) : geminiDone ? (
+                    <>
+                      <span style={{ color: "var(--gold)" }}>✓</span>
+                      Tags analysiert — erneut analysieren
+                    </>
+                  ) : (
+                    <>
+                      <span>◎</span>
+                      Tags analysieren
+                    </>
+                  )}
+                </button>
               )}
 
               {recommendations && !recDismissed && (
-                <div style={{ marginTop: 8 }}>
+                <div className="mt-3">
                   <RecommendationBanner
                     recommendations={recommendations}
                     onApply={applyRecommendations}
@@ -601,193 +856,381 @@ export default function Home() {
               )}
             </div>
 
-            {/* IMAGE UPLOAD */}
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--gold)", display: "inline-block" }} />
-                Bild-Rohmaterial
-                <span style={{ color: geminiDone ? "var(--gold)" : "var(--accent)", fontSize: 9 }}>
-                  {geminiDone ? "— ✓ Gemini Analyse abgeschlossen" : "— Gemini analysiert auf Anfrage"}
-                </span>
+            {/* ② IMAGE UPLOAD */}
+            <div className="card p-4">
+              <div className="section-label mb-3">
+                <span className="section-label-dot" style={{ background: "var(--gold)" }} />
+                Bild-Referenz
+                {geminiDone && (
+                  <span
+                    className="ml-auto text-[9px]"
+                    style={{ color: "var(--gold)", fontFamily: "var(--font-mono)" }}
+                  >
+                    ✓ Analysiert
+                  </span>
+                )}
               </div>
+
               {imagePreview ? (
-                <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid var(--accent)" }}>
-                  <img src={imagePreview} alt="Referenz" style={{ width: "100%", height: 200, objectFit: "cover", display: "block" }} />
-                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.88))", padding: "20px 14px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--gold)" }}>
+                <div
+                  className="relative rounded-lg overflow-hidden"
+                  style={{ border: "1px solid rgba(255,77,0,0.25)" }}
+                >
+                  <img
+                    src={imagePreview}
+                    alt="Referenz"
+                    className="w-full object-cover block"
+                    style={{ height: 190 }}
+                  />
+                  <div
+                    className="absolute inset-x-0 bottom-0 flex items-center justify-between px-3 py-2"
+                    style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.85))" }}
+                  >
+                    <span
+                      className="text-[10px]"
+                      style={{ fontFamily: "var(--font-mono)", color: geminiAnalysis ? "var(--gold)" : "var(--text-muted)" }}
+                    >
                       {geminiAnalysis ? "✓ Gemini Analyse abgeschlossen" : "Bereit für Gemini Analyse"}
                     </span>
-                    <button onClick={() => { setImagePreview(null); setImageBase64(null); setGeminiAnalysis(null); setGeminiDone(false); setRecommendations(null); setRecDismissed(false); }} style={{ background: "rgba(0,0,0,0.7)", border: "1px solid #444", color: "#ccc", width: 26, height: 26, borderRadius: "50%", cursor: "pointer", fontSize: 14 }}>×</button>
+                    <button
+                      onClick={() => {
+                        setImagePreview(null);
+                        setImageBase64(null);
+                        setGeminiAnalysis(null);
+                        setGeminiDone(false);
+                        setRecommendations(null);
+                        setRecDismissed(false);
+                      }}
+                      aria-label="Bild entfernen"
+                      className="flex items-center justify-center w-6 h-6 rounded-full text-sm transition-colors duration-150"
+                      style={{
+                        background: "rgba(0,0,0,0.6)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        color: "var(--text-secondary)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
                 </div>
               ) : (
                 <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Bild hochladen — klicken oder Datei hierher ziehen"
                   onClick={() => fileRef.current?.click()}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileRef.current?.click(); }
+                  }}
                   onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}
                   onDragOver={e => e.preventDefault()}
-                  style={{ border: "1.5px dashed var(--border2)", borderRadius: 10, padding: "30px 20px", textAlign: "center", cursor: "pointer", background: "var(--surface)", transition: "all 0.2s" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent)"; (e.currentTarget as HTMLDivElement).style.background = "rgba(255,77,0,0.04)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border2)"; (e.currentTarget as HTMLDivElement).style.background = "var(--surface)"; }}
+                  className="flex flex-col items-center justify-center gap-3 rounded-lg transition-all duration-150 cursor-pointer group"
+                  style={{
+                    border: "1.5px dashed var(--border2)",
+                    background: "var(--surface2)",
+                    padding: "32px 20px",
+                    textAlign: "center",
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,77,0,0.4)";
+                    (e.currentTarget as HTMLDivElement).style.background = "rgba(255,77,0,0.03)";
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border2)";
+                    (e.currentTarget as HTMLDivElement).style.background = "var(--surface2)";
+                  }}
                 >
-                  <div style={{ fontSize: 28, opacity: 0.15, marginBottom: 10 }}>⬆</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginBottom: 5 }}>Produkt / Referenzbild hochladen</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-dim)", lineHeight: 1.7 }}>Drag & Drop oder klicken<br />Gemini Flash extrahiert alle visuellen Details automatisch</div>
+                  <div className="text-3xl opacity-20" aria-hidden="true">⬆</div>
+                  <div>
+                    <div
+                      className="text-[12px] font-medium mb-1"
+                      style={{ fontFamily: "var(--font-mono)", color: "var(--accent)" }}
+                    >
+                      Produkt / Referenzbild hochladen
+                    </div>
+                    <div
+                      className="text-[10px] leading-relaxed"
+                      style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                    >
+                      Drag & Drop oder klicken<br />
+                      Gemini Flash extrahiert alle visuellen Details
+                    </div>
+                  </div>
                 </div>
               )}
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                aria-label="Bilddatei auswählen"
+                className="hidden"
+                onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
+              />
             </div>
 
-            {/* GEMINI ANALYSIS PREVIEW */}
+            {/* Gemini Analysis Preview */}
             {geminiAnalysis && (
-              <div style={{ background: "rgba(66,133,244,0.04)", border: "1px solid rgba(66,133,244,0.15)", borderRadius: 8, padding: "14px", animation: "fadeUp 0.3s ease" }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "#4285f4", marginBottom: 10 }}>✓ Gemini Analyse — Extrahierte Details</div>
+              <div
+                className="rounded-lg p-3.5"
+                style={{
+                  background: "var(--blue-subtle)",
+                  border: "1px solid rgba(59,130,246,0.15)",
+                  animation: "fadeUp 0.3s ease",
+                }}
+              >
+                <div
+                  className="text-[9px] uppercase tracking-widest mb-2.5"
+                  style={{ fontFamily: "var(--font-mono)", color: "var(--blue)" }}
+                >
+                  ✓ Gemini Analyse — Extrahierte Details
+                </div>
                 {Object.entries(geminiAnalysis).slice(0, 5).map(([k, v]) => (
-                  <div key={k} style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 8, marginBottom: 5 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#4285f4", textTransform: "uppercase", letterSpacing: 1 }}>{k}</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#777", lineHeight: 1.5 }}>{String(v).slice(0, 120)}{String(v).length > 120 ? "…" : ""}</span>
+                  <div key={k} className="grid gap-2 mb-1.5" style={{ gridTemplateColumns: "72px 1fr" }}>
+                    <span
+                      className="text-[9px] uppercase tracking-wide"
+                      style={{ fontFamily: "var(--font-mono)", color: "var(--blue)" }}
+                    >
+                      {k}
+                    </span>
+                    <span
+                      className="text-[11px] leading-snug"
+                      style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}
+                    >
+                      {String(v).slice(0, 110)}{String(v).length > 110 ? "…" : ""}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* TEXT INPUT */}
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
-                Zusätzliche Intention <span style={{ color: "var(--text-dim)" }}>(optional)</span>
+            {/* ③ SETTINGS */}
+            <div className="card p-4">
+              <div className="section-label mb-3">
+                <span className="section-label-dot" style={{ background: "var(--text-muted)" }} />
+                Setup
               </div>
-              <textarea rows={3} value={text} onChange={e => setText(e.target.value)}
-                placeholder="z.B. Fokus auf die Handwerkskunst, mysteriöse Atmosphäre, luxuriöse Wirkung..."
-                style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--border2)", borderRadius: 8, color: "#c8c4be", fontSize: 12.5, lineHeight: 1.8, padding: "12px 14px", resize: "none", transition: "all 0.2s" }}
-              />
-            </div>
-
-            {/* SETTINGS */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 7, fontFamily: "var(--font-mono)", display: "flex", alignItems: "center", gap: 6 }}>
-                  Stil-Tonalität
-                  {recommendations?.tone && tone !== recommendations.tone && (
-                    <span style={{ fontSize: 8, color: "#ff4d00", letterSpacing: 1, padding: "1px 5px", background: "rgba(255,77,0,0.1)", borderRadius: 2, animation: "recTagGlow 2s infinite" }}>→ {recommendations.tone}</span>
+              <div className={`grid gap-3 ${mode === "video" ? "grid-cols-2" : "grid-cols-1"}`}>
+                {/* Tone */}
+                <div>
+                  <label
+                    htmlFor="tone-select"
+                    className="block text-[10px] uppercase tracking-widest mb-1.5 flex items-center gap-2"
+                    style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                  >
+                    Tonalität
+                    {recommendations?.tone && tone !== recommendations.tone && (
+                      <span
+                        className="text-[8px] px-1.5 py-0.5 rounded tracking-wide"
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          color: "var(--accent)",
+                          background: "var(--accent-subtle)",
+                          animation: "recTagGlow 2s infinite",
+                        }}
+                        aria-label={`KI empfiehlt: ${recommendations.tone}`}
+                      >
+                        → {recommendations.tone}
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    id="tone-select"
+                    value={tone}
+                    onChange={e => setTone(e.target.value)}
+                    className={`form-select${recommendations?.tone && tone !== recommendations.tone ? " rec" : ""}`}
+                  >
+                    {[
+                      ["luxury", "Luxus / High-End"],
+                      ["documentary", "Dokumentarisch / Roh"],
+                      ["editorial", "Editorial / Fashion"],
+                      ["dark", "Dunkel / Dramatisch"],
+                      ["artistic", "Künstlerisch / Abstrakt"],
+                      ["commercial", "Kommerziell / Klar"],
+                    ].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  {TONE_TOOLTIPS[tone] && (
+                    <div
+                      className="hint mt-1.5 text-[10px]"
+                      style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}
+                    >
+                      {TONE_TOOLTIPS[tone].short}
+                    </div>
                   )}
                 </div>
-                <div style={{ position: "relative" }}>
-                  <select value={tone} onChange={e => setTone(e.target.value)} style={{
-                    width: "100%", appearance: "none", background: "var(--surface)",
-                    border: `1px solid ${recommendations?.tone && tone !== recommendations.tone ? "rgba(255,77,0,0.4)" : "var(--border2)"}`,
-                    borderRadius: 6, color: "#c8c4be", fontSize: 11, padding: "9px 28px 9px 12px", cursor: "pointer",
-                  }}>
-                    {[["luxury","Luxus / High-End"],["documentary","Dokumentarisch / Roh"],["editorial","Editorial / Fashion"],["dark","Dunkel / Dramatisch"],["artistic","Künstlerisch / Abstrakt"],["commercial","Kommerziell / Klar"]].map(([v, l]) => (
-                      <option key={v} value={v}>{l}</option>
-                    ))}
-                  </select>
-                  <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", fontSize: 10, pointerEvents: "none" }}>▾</span>
-                </div>
-                {TONE_TOOLTIPS[tone] && (
-                  <div style={{ marginTop: 6, padding: "6px 10px", background: "rgba(255,77,0,0.04)", border: "1px solid rgba(255,77,0,0.08)", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 10, color: "#555", lineHeight: 1.5 }}>
-                    {TONE_TOOLTIPS[tone].short}
+
+                {/* Duration (video only) */}
+                {mode === "video" && (
+                  <div>
+                    <label
+                      htmlFor="duration-select"
+                      className="block text-[10px] uppercase tracking-widest mb-1.5 flex items-center gap-2"
+                      style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                    >
+                      Videolänge
+                      {recommendations?.duration && duration !== recommendations.duration && (
+                        <span
+                          className="text-[8px] px-1.5 py-0.5 rounded tracking-wide"
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            color: "var(--green)",
+                            background: "var(--green-subtle)",
+                            animation: "recTagGlow 2s infinite",
+                          }}
+                          aria-label={`KI empfiehlt: ${recommendations.duration} Sekunden`}
+                        >
+                          → {recommendations.duration}s
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      id="duration-select"
+                      value={duration}
+                      onChange={e => setDuration(e.target.value)}
+                      className={`form-select${recommendations?.duration && duration !== recommendations.duration ? " rec" : ""}`}
+                    >
+                      {[
+                        ["3", "3 Sek — Micro"],
+                        ["5", "5 Sek — Standard"],
+                        ["8", "8 Sek — Hero Shot"],
+                        ["15", "15 Sek — Feature"],
+                      ].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                    {DURATION_TOOLTIPS[duration] && (
+                      <div
+                        className="hint mt-1.5 text-[10px]"
+                        style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}
+                      >
+                        {DURATION_TOOLTIPS[duration].short}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {mode === "video" && (
-                <div>
-                  <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 7, fontFamily: "var(--font-mono)", display: "flex", alignItems: "center", gap: 6 }}>
-                    Videolänge
-                    {recommendations?.duration && duration !== recommendations.duration && (
-                      <span style={{ fontSize: 8, color: "#4ade80", letterSpacing: 1, padding: "1px 5px", background: "rgba(74,222,128,0.1)", borderRadius: 2, animation: "recTagGlow 2s infinite" }}>→ {recommendations.duration}s</span>
-                    )}
-                  </div>
-                  <div style={{ position: "relative" }}>
-                    <select value={duration} onChange={e => setDuration(e.target.value)} style={{
-                      width: "100%", appearance: "none", background: "var(--surface)",
-                      border: `1px solid ${recommendations?.duration && duration !== recommendations.duration ? "rgba(74,222,128,0.4)" : "var(--border2)"}`,
-                      borderRadius: 6, color: "#c8c4be", fontSize: 11, padding: "9px 28px 9px 12px", cursor: "pointer",
-                    }}>
-                      {[["3","3 Sek — Micro"],["5","5 Sek — Standard"],["8","8 Sek — Hero Shot"],["15","15 Sek — Feature"]].map(([v, l]) => (
-                        <option key={v} value={v}>{l}</option>
-                      ))}
-                    </select>
-                    <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", fontSize: 10, pointerEvents: "none" }}>▾</span>
-                  </div>
-                  {DURATION_TOOLTIPS[duration] && (
-                    <div style={{ marginTop: 6, padding: "6px 10px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.08)", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 10, color: "#555", lineHeight: 1.5 }}>
-                      {DURATION_TOOLTIPS[duration].short}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Intent textarea */}
+              <div className="mt-3">
+                <label
+                  htmlFor="intention-input"
+                  className="block text-[10px] uppercase tracking-widest mb-1.5"
+                  style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                >
+                  Intention{" "}
+                  <span style={{ color: "var(--text-muted)", textTransform: "none", letterSpacing: 0, opacity: 0.7 }}>
+                    (optional)
+                  </span>
+                </label>
+                <textarea
+                  id="intention-input"
+                  rows={3}
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  placeholder="z.B. mysteriöse Atmosphäre, luxuriöse Wirkung, Fokus auf Handwerkskunst..."
+                  className="form-textarea"
+                />
+              </div>
             </div>
 
-            {/* ORCHESTRA LIBRARY */}
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "var(--text-dim)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>Orchestra Library</span>
-                <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--text-dim)", letterSpacing: 1 }}>Hover · Klick für Details</span>
+            {/* ④ ORCHESTRA LIBRARY */}
+            <div className="card p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="section-label flex-1">
+                  <span className="section-label-dot" style={{ background: "#A78BFA" }} />
+                  Orchestra Library
+                </div>
                 {selectedTags.length > 0 && (
-                  <button onClick={() => setSelectedTags([])} style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", letterSpacing: 1 }}>
-                    LEEREN ({selectedTags.length})
+                  <button
+                    onClick={() => setSelectedTags([])}
+                    className="btn-ghost text-[9px]"
+                  >
+                    Leeren ({selectedTags.length})
                   </button>
                 )}
               </div>
 
               {selectedTags.length > 0 && (
-                <div style={{ marginBottom: 10, padding: "6px 12px", background: "rgba(255,77,0,0.05)", border: "1px solid rgba(255,77,0,0.15)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#ff6622", display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 8, letterSpacing: 2, textTransform: "uppercase", color: "#ff4d00" }}>AKTIV</span>
-                  <span>{selectedTags.length} Tags — alle werden im Breakdown einzeln erläutert</span>
+                <div
+                  className="px-3 py-2 rounded-md mb-3 flex items-center gap-2 text-[10px]"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    background: "rgba(255,77,0,0.05)",
+                    border: "1px solid rgba(255,77,0,0.12)",
+                    color: "#FF6622",
+                  }}
+                >
+                  <span
+                    className="text-[8px] uppercase tracking-widest"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    AKTIV
+                  </span>
+                  <span>{selectedTags.length} Tags ausgewählt</span>
                 </div>
               )}
 
-              {/* Tab-Leiste */}
-              <div style={{ display: "flex", gap: 2, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+              {/* Library tab bar */}
+              <LibraryTabScroller>
                 {filteredLibrary.map(cat => {
                   const isActive = cat.id === activeCategoryId;
-                  const selectedInCat = cat.entries.filter(e => selectedTags.includes(e.label)).length;
-                  const recommendedInCat = cat.entries.filter(e =>
-                    recommendations?.tags?.includes(e.label) && !selectedTags.includes(e.label)
+                  const selCount = cat.entries.filter(e => selectedTags.includes(e.label)).length;
+                  const recCount = cat.entries.filter(
+                    e => recommendations?.tags?.includes(e.label) && !selectedTags.includes(e.label)
                   ).length;
                   return (
-                    <button key={cat.id}
+                    <button
+                      key={cat.id}
+                      role="tab"
+                      aria-selected={isActive}
+                      aria-label={`${cat.label}${recCount > 0 ? `, ${recCount} KI-Empfehlungen` : ""}${selCount > 0 ? `, ${selCount} ausgewählt` : ""}`}
+                      tabIndex={isActive ? 0 : -1}
                       onClick={() => setActiveLibraryCategory(cat.id)}
+                      onKeyDown={e => {
+                        const ids = filteredLibrary.map(c => c.id);
+                        const idx = ids.indexOf(cat.id);
+                        if (e.key === "ArrowRight") { e.preventDefault(); setActiveLibraryCategory(ids[(idx + 1) % ids.length]); }
+                        if (e.key === "ArrowLeft") { e.preventDefault(); setActiveLibraryCategory(ids[(idx - 1 + ids.length) % ids.length]); }
+                      }}
+                      className="lib-tab"
                       style={{
-                        padding: "4px 10px", fontSize: 9, letterSpacing: 1.5,
-                        textTransform: "uppercase" as const, fontFamily: "var(--font-mono)",
-                        cursor: "pointer", whiteSpace: "nowrap" as const, border: "none",
+                        color: isActive ? cat.color : "var(--text-muted)",
+                        background: isActive ? `${cat.color}10` : "transparent",
                         borderBottom: isActive ? `2px solid ${cat.color}` : "2px solid transparent",
-                        background: isActive ? `${cat.color}15` : "transparent",
-                        color: isActive ? cat.color : "var(--text-dim)",
-                        transition: "all 0.15s",
+                        marginBottom: -1,
+                        flexShrink: 0,
                       }}
                     >
                       {cat.label}
-                      {recommendedInCat > 0 && (
-                        <span style={{
-                          marginLeft: 5, fontSize: 8, background: "#ff4d00",
-                          color: "#fff", borderRadius: 8, padding: "1px 5px",
-                          animation: "recTagGlow 2s ease-in-out infinite",
-                        }}>
-                          {recommendedInCat}
+                      {recCount > 0 && (
+                        <span
+                          className="ml-1.5 text-[7px] px-1 py-0.5 rounded-full"
+                          style={{
+                            background: "var(--accent)",
+                            color: "#fff",
+                            fontFamily: "var(--font-mono)",
+                            animation: "recTagGlow 2s ease-in-out infinite",
+                          }}
+                        >
+                          {recCount}
                         </span>
                       )}
-                      {selectedInCat > 0 && (
-                        <span style={{
-                          marginLeft: recommendedInCat > 0 ? 3 : 5, fontSize: 8, background: cat.color,
-                          color: "#000", borderRadius: 8, padding: "1px 5px",
-                        }}>
-                          {selectedInCat}
+                      {selCount > 0 && (
+                        <span
+                          className="ml-1 text-[7px] px-1 py-0.5 rounded-full"
+                          style={{ background: cat.color, color: "#000", fontFamily: "var(--font-mono)" }}
+                        >
+                          {selCount}
                         </span>
                       )}
                     </button>
                   );
                 })}
-              </div>
+              </LibraryTabScroller>
 
-              {/* Tag-Inhalt der aktiven Kategorie */}
+              {/* Tags for active category */}
               {filteredLibrary
                 .filter(cat => cat.id === activeCategoryId)
                 .map(cat => (
-                  <div key={cat.id} style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  <div key={cat.id} className="flex flex-wrap" style={{ margin: -3 }}>
                     {cat.entries.map(entry => (
                       <TagWithTooltip
                         key={entry.label}
@@ -800,47 +1243,65 @@ export default function Home() {
                       />
                     ))}
                   </div>
-                ))
-              }
+                ))}
             </div>
 
-            {/* SCENE LIBRARY */}
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" as const, color: "var(--text-dim)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>Scene Library</span>
-                <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--text-dim)", letterSpacing: 1 }}>Kombinierbar · steuert Szenen-Generierung</span>
+            {/* ⑤ SCENE LIBRARY */}
+            <div className="card p-4">
+              <div className="section-label mb-3">
+                <span className="section-label-dot" style={{ background: "#38BDF8" }} />
+                Scene Library
+                <span
+                  className="ml-auto text-[9px]"
+                  style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                >
+                  Kombinierbar
+                </span>
                 {selectedSeeds.length > 0 && (
-                  <button onClick={() => setSelectedSeeds([])} style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", letterSpacing: 1 }}>
-                    LEEREN ({selectedSeeds.length})
+                  <button onClick={() => setSelectedSeeds([])} className="btn-ghost text-[9px]">
+                    Leeren ({selectedSeeds.length})
                   </button>
                 )}
               </div>
 
               {selectedSeeds.length > 0 && (
-                <div style={{ marginBottom: 10, padding: "6px 12px", background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#a78bfa", display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 8, letterSpacing: 2, textTransform: "uppercase" as const }}>AKTIV</span>
-                  <span style={{ color: "#c8c4be" }}>{selectedSeeds.length} Seeds — steuern alle 6 Szenarien</span>
+                <div
+                  className="px-3 py-2 rounded-md mb-3 flex items-center gap-2 text-[10px]"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    background: "rgba(167,139,250,0.05)",
+                    border: "1px solid rgba(167,139,250,0.2)",
+                    color: "#A78BFA",
+                  }}
+                >
+                  <span className="text-[8px] uppercase tracking-widest">AKTIV</span>
+                  <span style={{ color: "var(--text-secondary)" }}>{selectedSeeds.length} Seeds</span>
                 </div>
               )}
 
               {SCENE_LIBRARY.map(cat => (
-                <div key={cat.id} style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" as const, color: cat.color + "80", marginBottom: 7, fontFamily: "var(--font-mono)" }}>{cat.label}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                <div key={cat.id} className="mb-3">
+                  <div
+                    className="text-[9px] uppercase tracking-widest mb-2"
+                    style={{ fontFamily: "var(--font-mono)", color: `${cat.color}80` }}
+                  >
+                    {cat.label}
+                  </div>
+                  <div className="flex flex-wrap" style={{ margin: -3 }}>
                     {cat.entries.map(entry => {
-                      const isSelected = selectedSeeds.includes(entry.label);
+                      const isSel = selectedSeeds.includes(entry.label);
                       return (
                         <button
                           key={entry.label}
-                          onClick={() => setSelectedSeeds(p => isSelected ? p.filter(x => x !== entry.label) : [...p, entry.label])}
+                          onClick={() => setSelectedSeeds(p =>
+                            isSel ? p.filter(x => x !== entry.label) : [...p, entry.label]
+                          )}
+                          className="tag-pill"
                           style={{
-                            padding: "4px 11px", borderRadius: 20, fontSize: 11, margin: 4,
-                            fontFamily: "var(--font-mono)", cursor: "pointer", letterSpacing: "0.3px",
-                            border: `1px solid ${isSelected ? cat.color : `${cat.color}30`}`,
-                            background: isSelected ? `${cat.color}20` : `${cat.color}08`,
-                            color: isSelected ? cat.color : "#555",
-                            transition: "all 0.2s",
+                            margin: 3,
+                            border: `1px solid ${isSel ? cat.color : `${cat.color}30`}`,
+                            background: isSel ? `${cat.color}20` : `${cat.color}08`,
+                            color: isSel ? cat.color : "var(--text-muted)",
                           }}
                         >
                           {entry.label}
@@ -852,71 +1313,91 @@ export default function Home() {
               ))}
             </div>
 
-            {/* SCENE ORCHESTRATOR */}
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                <span style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" as const, color: "var(--text-dim)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
+            {/* ⑥ SCENE ORCHESTRATOR */}
+            <div className="card p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="section-label flex-1">
+                  <span className="section-label-dot" style={{ background: "var(--accent)" }} />
                   Szenen-Orchestrator
-                </span>
-                <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                </div>
                 {selectedScene && (
                   <button
                     onClick={() => setSelectedScene(null)}
-                    style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--accent)", background: "none", border: "none", cursor: "pointer", letterSpacing: 1 }}
+                    className="btn-ghost text-[9px]"
+                    style={{ color: "var(--accent)" }}
                   >
-                    SZENARIO ENTFERNEN
+                    Entfernen
                   </button>
                 )}
               </div>
 
               {selectedScene && (
-                <div style={{ marginBottom: 10, padding: "8px 12px", background: "rgba(255,77,0,0.08)", border: "1px solid rgba(255,77,0,0.3)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 8, letterSpacing: 2, textTransform: "uppercase" as const }}>AKTIV</span>
-                  <span style={{ color: "#c8c4be" }}>{selectedScene.title}</span>
+                <div
+                  className="px-3 py-2 rounded-md mb-3 flex items-center gap-2 text-[10px]"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    background: "var(--accent-subtle)",
+                    border: "1px solid rgba(255,77,0,0.25)",
+                    color: "var(--accent)",
+                  }}
+                >
+                  <span className="text-[8px] uppercase tracking-widest">AKTIV</span>
+                  <span style={{ color: "var(--text-secondary)" }}>{selectedScene.title}</span>
                 </div>
               )}
 
               <button
                 onClick={generateScenes}
                 disabled={isGeneratingScenes || isLoading || (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0)}
-                style={{
-                  width: "100%", padding: "10px 0", marginBottom: scenes.length > 0 ? 12 : 0,
-                  background: isGeneratingScenes ? "rgba(255,77,0,0.08)" : (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0) ? "var(--surface)" : "rgba(255,77,0,0.1)",
-                  border: `1px solid ${isGeneratingScenes ? "var(--accent)" : (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0) ? "var(--border)" : "rgba(255,77,0,0.35)"}`,
-                  borderRadius: 6, cursor: (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0) || isGeneratingScenes ? "default" : "pointer",
-                  color: (!geminiAnalysis && !text.trim() && selectedSeeds.length === 0) ? "var(--text-dim)" : "var(--accent)",
-                  fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 700,
-                  letterSpacing: 2, textTransform: "uppercase" as const, transition: "all 0.2s",
-                }}
+                className="btn-secondary w-full mb-3"
               >
-                {isGeneratingScenes
-                  ? <span style={{ animation: "pulse 1.2s infinite" }}>Szenarien werden generiert...</span>
-                  : scenes.length > 0 ? "Neue Szenarien generieren" : "Szenarien generieren →"}
+                {isGeneratingScenes ? (
+                  <span style={{ animation: "pulse 1.2s infinite" }}>Szenarien generieren…</span>
+                ) : scenes.length > 0 ? (
+                  "Neue Szenarien generieren"
+                ) : (
+                  "Szenarien generieren →"
+                )}
               </button>
 
               {scenes.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div className="grid grid-cols-2 gap-2">
                   {scenes.map(scene => {
-                    const isSelected = selectedScene?.id === scene.id;
+                    const isSel = selectedScene?.id === scene.id;
                     return (
                       <button
                         key={scene.id}
-                        onClick={() => setSelectedScene(isSelected ? null : scene)}
+                        onClick={() => setSelectedScene(isSel ? null : scene)}
+                        className="text-left p-3 rounded-lg transition-all duration-150"
                         style={{
-                          textAlign: "left" as const, padding: "12px 14px", borderRadius: 8,
-                          background: isSelected ? "rgba(255,77,0,0.1)" : "var(--surface)",
-                          border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
-                          cursor: "pointer", transition: "all 0.2s",
-                          boxShadow: isSelected ? "0 0 10px rgba(255,77,0,0.15)" : "none",
+                          background: isSel ? "var(--accent-subtle)" : "var(--surface2)",
+                          border: `1px solid ${isSel ? "rgba(255,77,0,0.35)" : "var(--border)"}`,
+                          boxShadow: isSel ? "0 0 12px rgba(255,77,0,0.1)" : "none",
+                          cursor: "pointer",
                         }}
                       >
-                        <div style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 700, color: isSelected ? "var(--accent)" : "#c8c4be", marginBottom: 5, letterSpacing: 0.3 }}>
+                        <div
+                          className="text-[11px] font-semibold mb-1.5 leading-tight"
+                          style={{
+                            fontFamily: "var(--font-display)",
+                            color: isSel ? "var(--accent)" : "var(--text-secondary)",
+                          }}
+                        >
                           {scene.title}
                         </div>
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#666", lineHeight: 1.55, marginBottom: 6, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }}>
+                        <div
+                          className="text-[10px] leading-snug mb-1.5 line-clamp-3"
+                          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                        >
                           {scene.scenario}
                         </div>
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: isSelected ? "rgba(255,77,0,0.7)" : "#444", letterSpacing: 0.5 }}>
+                        <div
+                          className="text-[9px]"
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            color: isSel ? "rgba(255,77,0,0.6)" : "var(--text-muted)",
+                          }}
+                        >
                           {scene.mood}
                         </div>
                       </button>
@@ -925,131 +1406,236 @@ export default function Home() {
                 </div>
               )}
             </div>
-          </div>
 
-          {/* GENERATE */}
-          <div style={{ padding: "16px 24px 22px", borderTop: "1px solid var(--border)" }}>
+          </div>{/* end scrollable */}
+
+          {/* Sticky generate footer */}
+          <div
+            className="p-4 flex flex-col gap-3"
+            style={{
+              borderTop: "1px solid var(--border)",
+              background: "var(--bg)",
+            }}
+          >
+            {/* Summary tag */}
             {selectedTags.length > 0 && (
-              <div style={{ marginBottom: 10, padding: "6px 12px", background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.1)", borderRadius: 5, fontFamily: "var(--font-mono)", fontSize: 9, color: "#4ade8066", letterSpacing: 1 }}>
+              <div
+                className="px-3 py-1.5 rounded-md text-[9px] tracking-wide"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  background: "rgba(16,185,129,0.04)",
+                  border: "1px solid rgba(16,185,129,0.1)",
+                  color: "rgba(16,185,129,0.5)",
+                  letterSpacing: "0.05em",
+                }}
+              >
                 ✓ {selectedTags.length} Tags · {tone} · {mode === "video" ? `${duration}s` : "Bild"} · {useCase}
               </div>
             )}
-            <button onClick={generate} disabled={!canGenerate} style={{
-              width: "100%", padding: "15px 0",
-              background: canGenerate ? "var(--accent)" : "var(--surface)",
-              border: "none", borderRadius: 8,
-              color: canGenerate ? "white" : "var(--text-dim)",
-              fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 800,
-              letterSpacing: 2, textTransform: "uppercase",
-              cursor: canGenerate ? "pointer" : "not-allowed",
-              transition: "all 0.2s", position: "relative", overflow: "hidden",
-            }}>
-              {step === 1 ? <span style={{ animation: "pulse 1.2s infinite" }}>① Gemini analysiert Bild...</span>
-               : step === 2 ? <span style={{ animation: "pulse 1.2s infinite" }}>② Claude erstellt Prompt...</span>
-               : geminiDone
-                 ? `${currentUseCase.icon} ② ${mode === "video" ? "Video" : "Bild"} Prompt generieren →`
-                 : `${currentUseCase.icon} ${mode === "video" ? "Video" : "Bild"} Prompt für "${currentUseCase.label}" generieren →`}
+
+            {/* Generate button */}
+            <button
+              onClick={generate}
+              disabled={!canGenerate}
+              className="btn-primary"
+              style={{ position: "relative" }}
+            >
+              {step === 1 ? (
+                <span style={{ animation: "pulse 1.2s infinite" }}>
+                  Gemini analysiert Bild…
+                </span>
+              ) : step === 2 ? (
+                <span style={{ animation: "pulse 1.2s infinite" }}>
+                  Claude erstellt Prompt…
+                </span>
+              ) : (
+                <>
+                  <span>{currentUseCase.icon}</span>
+                  {mode === "video" ? "Video" : "Bild"} Prompt generieren
+                  {!isLoading && " →"}
+                </>
+              )}
               {isLoading && (
-                <div style={{ position: "absolute", bottom: 0, left: "-60%", width: "60%", height: 2, background: step === 1 ? "#4285f4" : "var(--accent)", animation: "slide 1.4s ease-in-out infinite" }} />
+                <span
+                  className="absolute bottom-0 left-0 h-[2px]"
+                  style={{
+                    width: "50%",
+                    background: step === 1 ? "var(--blue)" : "rgba(255,255,255,0.5)",
+                    animation: "slideBar 1.4s ease-in-out infinite",
+                  }}
+                />
               )}
             </button>
+
             {error && (
-              <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(255,100,100,0.07)", border: "1px solid rgba(255,100,100,0.18)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 11, color: "#ff6464", lineHeight: 1.6 }}>
-                ⚠ {error}
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="px-3 py-2.5 rounded-lg text-[11px] leading-relaxed"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  background: "rgba(248,113,113,0.06)",
+                  border: "1px solid rgba(248,113,113,0.18)",
+                  color: "#F87171",
+                }}
+              >
+                <span aria-hidden="true">⚠ </span>{error}
               </div>
             )}
           </div>
-        </div>
+        </aside>
 
-        {/* ── RIGHT: OUTPUT ── */}
-        <div style={{ background: "#060606", display: "flex", flexDirection: "column" }}>
-          <div style={{ padding: "13px 24px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", gap: 2 }}>
+        {/* ═══════════════════════════════════════════════════════
+            OUTPUT PANEL (flex)
+        ═══════════════════════════════════════════════════════ */}
+        <section
+          className="flex flex-col"
+          style={{
+            flex: "1 1 0",
+            minWidth: 0,
+            overflow: "hidden",
+            background: "#0A0A0C",
+          }}
+        >
+          {/* Tab bar + copy */}
+          <div
+            className="flex items-center justify-between px-5 shrink-0"
+            style={{ borderBottom: "1px solid var(--border)" }}
+          >
+            <div role="tablist" aria-label="Ausgabe-Ansichten" className="tab-bar border-0 flex-1">
               {tabs.map(({ id, label }) => (
-                <button key={id} onClick={() => setActiveTab(id)} style={{
-                  padding: "6px 12px", fontSize: 10, fontWeight: 600, letterSpacing: 1.5,
-                  textTransform: "uppercase", cursor: "pointer", fontFamily: "var(--font-mono)",
-                  border: "none", borderRadius: 5, transition: "all 0.15s",
-                  background: activeTab === id ? "var(--surface2)" : "transparent",
-                  color: activeTab === id
-                    ? id === "breakdown" ? "var(--gold)" : "var(--text)"
-                    : id === "breakdown" && hasBreakdown ? "#665500" : "var(--text-dim)",
-                }}>{label}</button>
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={activeTab === id}
+                  aria-controls={`tabpanel-${id}`}
+                  id={`tab-${id}`}
+                  onClick={() => setActiveTab(id)}
+                  onKeyDown={e => {
+                    const ids = tabs.map(t => t.id);
+                    const idx = ids.indexOf(id);
+                    if (e.key === "ArrowRight") { e.preventDefault(); setActiveTab(ids[(idx + 1) % ids.length]); }
+                    if (e.key === "ArrowLeft") { e.preventDefault(); setActiveTab(ids[(idx - 1 + ids.length) % ids.length]); }
+                  }}
+                  tabIndex={activeTab === id ? 0 : -1}
+                  className={`tab-item${activeTab === id ? (id === "breakdown" ? " gold-active" : " active") : ""}`}
+                >
+                  {label}
+                </button>
               ))}
             </div>
             {output && (
-              <button onClick={copyAll} style={{
-                padding: "6px 13px", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: 1,
-                cursor: "pointer", border: `1px solid ${copied ? "var(--green)" : "var(--border2)"}`,
-                borderRadius: 5, background: "transparent",
-                color: copied ? "var(--green)" : "var(--text-muted)", transition: "all 0.2s",
-              }}>{copied ? "✓ KOPIERT" : "⎘ ALLES KOPIEREN"}</button>
+              <button onClick={copyAll} className={`copy-btn${copied ? " copied" : ""}`}>
+                {copied ? "✓ Kopiert" : "⎘ Alles kopieren"}
+              </button>
             )}
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-
-            {/* EMPTY */}
+          {/* Output content */}
+          <div
+            className="flex-1 overflow-y-auto p-5"
+            aria-live="polite"
+            aria-atomic="false"
+          >
+            {/* ── Empty state ── */}
             {!output && step === 0 && (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center", opacity: 0.3 }}>
-                <div style={{ fontSize: 44 }}>◈</div>
-                <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 20, color: "#888" }}>Deine Vision wartet</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#555", lineHeight: 2 }}>
-                  Tags wählen → generieren → im Breakdown Tab<br />
-                  siehst du wie jeder Tag konkret angewendet wurde
+              <div className="h-full flex flex-col items-center justify-center gap-5 text-center opacity-25 select-none">
+                <div className="text-5xl" aria-hidden="true">◈</div>
+                <div
+                  className="text-xl italic"
+                  style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)" }}
+                >
+                  Deine Vision wartet
+                </div>
+                <div
+                  className="text-[11px] leading-loose max-w-[260px]"
+                  style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                >
+                  Tags wählen → generieren → im Breakdown Tab siehst du wie jeder Tag angewendet wurde
                 </div>
               </div>
             )}
 
-            {/* LOADING */}
+            {/* ── Loading state ── */}
             {isLoading && !output && (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20 }}>
-                <div style={{ fontSize: 36, animation: "pulse 1.2s infinite" }}>◈</div>
-                <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 18, color: "#555" }}>
-                  {step === 1 ? "Gemini liest dein Bild..." : "Claude erstellt den Prompt..."}
+              <div
+                role="status"
+                aria-live="polite"
+                aria-label={step === 1 ? "Gemini analysiert Bild" : "Claude erstellt Prompt"}
+                className="h-full flex flex-col items-center justify-center gap-5"
+              >
+                <div
+                  className="text-4xl"
+                  style={{ animation: "pulse 1.2s infinite" }}
+                  aria-hidden="true"
+                >
+                  ◈
                 </div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#333", letterSpacing: 1, textAlign: "center", lineHeight: 1.8 }}>
+                <div
+                  className="text-lg italic"
+                  style={{ fontFamily: "var(--font-display)", color: "var(--text-muted)" }}
+                >
+                  {step === 1 ? "Gemini liest dein Bild…" : "Claude erstellt den Prompt…"}
+                </div>
+                <div
+                  className="text-[10px] text-center leading-loose tracking-wide"
+                  style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                >
                   {step === 1 ? "Farben · Materialien · Licht · Details" : "Bild-Daten + Tags + Breakdown → Prompt"}
                 </div>
               </div>
             )}
 
-            {/* OUTPUT */}
+            {/* ── Output ── */}
             {output && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeUp 0.4s ease" }}>
-
+              <div
+                className="flex flex-col gap-4"
+                style={{ animation: "fadeUp 0.35s ease" }}
+              >
                 {/* Score Bars */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div className="flex flex-col gap-2">
                   <ScoreBar label="Prompt Qualität" value={qScore} color={qColor} tooltipKey="quality_score" />
                   <ScoreBar label="Detail-Genauigkeit" value={dScore} color={dColor} tooltipKey="detail_accuracy" />
 
                   {selectedTags.length > 0 && tagsIntegrated !== undefined && (
                     <Tooltip data={{
-                      short: `${tagsIntegrated} von ${selectedTags.length} Tags wurden in den Prompt integriert.`,
-                      effekt: "Prüft ob alle Orchestra Tags tatsächlich im generierten Prompt landen.",
+                      short: `${tagsIntegrated} von ${selectedTags.length} Tags wurden integriert.`,
                       profi_tipp: tagsIntegrated < selectedTags.length
                         ? "Breakdown Tab öffnen um zu sehen welche Tags fehlen."
-                        : "Alle Tags erfolgreich integriert — Breakdown Tab zeigt die Details.",
+                        : "Alle Tags erfolgreich integriert.",
                     }}>
-                      <div style={{
-                        display: "flex", alignItems: "center", gap: 12, padding: "9px 14px",
-                        background: "var(--surface)", borderRadius: 7, border: "1px solid var(--border)",
-                        cursor: "pointer",
-                      }}>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", color: "var(--text-dim)", whiteSpace: "nowrap", minWidth: 110 }}>Tags integriert</span>
-                        <div style={{ flex: 1, height: 3, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
-                          <div style={{
-                            width: `${(tagsIntegrated / selectedTags.length) * 100}%`,
-                            height: "100%",
-                            background: tagsIntegrated === selectedTags.length ? "#4ade80" : "#ffd166",
-                            borderRadius: 2, transition: "width 1.2s ease",
-                          }} />
+                      <div
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer"
+                        style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+                      >
+                        <span
+                          className="text-[10px] uppercase tracking-widest whitespace-nowrap"
+                          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)", minWidth: 110 }}
+                        >
+                          Tags integriert
+                        </span>
+                        <div
+                          className="flex-1 h-[3px] rounded-full overflow-hidden"
+                          style={{ background: "var(--surface3)" }}
+                        >
+                          <div
+                            className="h-full rounded-full transition-all duration-1000"
+                            style={{
+                              width: `${(tagsIntegrated / selectedTags.length) * 100}%`,
+                              background: tagsIntegrated === selectedTags.length ? "var(--green)" : "var(--gold)",
+                            }}
+                          />
                         </div>
-                        <span style={{
-                          fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500,
-                          color: tagsIntegrated === selectedTags.length ? "#4ade80" : "#ffd166",
-                          minWidth: 55, textAlign: "right",
-                        }}>{tagsIntegrated}/{selectedTags.length}</span>
+                        <span
+                          className="text-[13px] font-medium text-right"
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            color: tagsIntegrated === selectedTags.length ? "var(--green)" : "var(--gold)",
+                            minWidth: 46,
+                          }}
+                        >
+                          {tagsIntegrated}/{selectedTags.length}
+                        </span>
                       </div>
                     </Tooltip>
                   )}
@@ -1058,7 +1644,15 @@ export default function Home() {
                 {/* Ghost Director */}
                 {output.ghost_director && (
                   <Tooltip data={OUTPUT_TOOLTIPS["ghost_director"] || { short: "Unsichtbare Regie-Philosophie" }}>
-                    <div style={{ padding: "11px 15px", background: "rgba(255,77,0,0.03)", border: "1px solid rgba(255,77,0,0.1)", borderRadius: 8, fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 13, color: "#666", lineHeight: 1.7, cursor: "pointer" }}>
+                    <div
+                      className="px-4 py-3 rounded-lg text-[13px] italic leading-relaxed cursor-pointer"
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        background: "rgba(255,77,0,0.03)",
+                        border: "1px solid rgba(255,77,0,0.08)",
+                        color: "var(--text-muted)",
+                      }}
+                    >
                       "{output.ghost_director}"
                     </div>
                   </Tooltip>
@@ -1066,57 +1660,188 @@ export default function Home() {
 
                 {/* Use Case Note */}
                 {output.use_case_notes && (
-                  <div style={{ padding: "8px 12px", background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#4ade8088", lineHeight: 1.6, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <div
+                    className="px-3 py-2 rounded-lg text-[11px] leading-relaxed flex gap-2.5 items-start"
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      background: "var(--green-subtle)",
+                      border: "1px solid rgba(16,185,129,0.12)",
+                      color: "rgba(16,185,129,0.7)",
+                    }}
+                  >
                     <span>{currentUseCase.icon}</span>
-                    <span style={{ flex: 1 }}>{output.use_case_notes}</span>
-                    <span style={{ marginLeft: "auto", fontSize: 8, letterSpacing: 1.5, color: "#333", whiteSpace: "nowrap", paddingTop: 1 }}>
+                    <span className="flex-1">{output.use_case_notes}</span>
+                    <span
+                      className="text-[8px] uppercase tracking-widest whitespace-nowrap pt-0.5 opacity-50"
+                      style={{ fontFamily: "var(--font-mono)" }}
+                    >
                       {tone.toUpperCase()} · {mode === "video" ? `${duration}S` : "IMG"}
                     </span>
                   </div>
                 )}
 
-                {/* ── TAB: PROMPT ── */}
+                {/* ── PROMPT TAB ── */}
                 {activeTab === "prompt" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div role="tabpanel" id="tabpanel-prompt" aria-labelledby="tab-prompt" className="flex flex-col gap-4">
                     <div>
-                      <SectionLabel color="var(--accent)">Haupt-Prompt (Englisch — Copy & Paste)</SectionLabel>
-                      <div style={{ background: "var(--surface)", border: "1px solid var(--border2)", borderLeft: "3px solid var(--accent)", borderRadius: 8, padding: "14px 16px", fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.9, color: "#c8c4be", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                        {output.main_prompt}
+                      <div
+                        className="flex items-center gap-2.5 mb-2.5"
+                        style={{ borderLeft: "3px solid var(--accent)", paddingLeft: 10 }}
+                      >
+                        <span className="section-label">Haupt-Prompt</span>
+                        <span
+                          className="text-[9px] uppercase tracking-wide"
+                          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                        >
+                          EN · Copy & Paste
+                        </span>
                       </div>
+                      <div className="prompt-block">{output.main_prompt}</div>
                     </div>
+
                     <div>
-                      <SectionLabel color="#ff6464">Negative Prompt</SectionLabel>
-                      <div style={{ background: "var(--surface)", border: "1px solid var(--border2)", borderLeft: "3px solid #ff6464", borderRadius: 8, padding: "14px 16px", fontFamily: "var(--font-mono)", fontSize: 12.5, lineHeight: 1.9, color: "#ff9999", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                      <div
+                        className="flex items-center gap-2.5 mb-2.5"
+                        style={{ borderLeft: "3px solid #F87171", paddingLeft: 10 }}
+                      >
+                        <span className="section-label">Negative Prompt</span>
+                      </div>
+                      <div
+                        className="prompt-block"
+                        style={{ color: "#FCA5A5", borderLeft: "3px solid #F87171" }}
+                      >
                         {output.negative_prompt}
                       </div>
                     </div>
+
                     {hasBreakdown && (
-                      <div style={{ padding: "8px 12px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.1)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#665500", display: "flex", alignItems: "center", gap: 8 }}>
+                      <div
+                        className="px-3 py-2.5 rounded-lg flex items-center gap-2.5 text-[10px]"
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          background: "rgba(245,158,11,0.04)",
+                          border: "1px solid rgba(245,158,11,0.1)",
+                          color: "var(--text-muted)",
+                        }}
+                      >
                         <span>◈</span>
                         <span>
-                          {Object.keys(promptBreakdown!).length} Tags erklärt im
-                          <button onClick={() => setActiveTab("breakdown")} style={{ background: "none", border: "none", color: "var(--gold)", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10, padding: "0 4px", textDecoration: "underline" }}>
+                          {Object.keys(promptBreakdown!).length} Tags erklärt im{" "}
+                          <button
+                            onClick={() => setActiveTab("breakdown")}
+                            style={{
+                              background: "none", border: "none",
+                              color: "var(--gold)", cursor: "pointer",
+                              fontFamily: "var(--font-mono)", fontSize: 10,
+                              padding: "0 2px", textDecoration: "underline",
+                            }}
+                          >
                             Breakdown Tab
                           </button>
-                          — sieh wie jeder Tag auf dein Produkt angewendet wurde
+                          {" "}— sieh wie jeder Tag angewendet wurde
                         </span>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* ── TAB: BREAKDOWN (new) ── */}
-                {activeTab === "breakdown" && (
-                  <div>
-                    <SectionLabel color="var(--gold)">Prompt Breakdown — Tag-Anwendung auf dieses Produkt</SectionLabel>
-
-                    {hasBreakdown ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {/* Intro note */}
-                        <div style={{ padding: "8px 12px", background: "rgba(255,209,102,0.04)", border: "1px solid rgba(255,209,102,0.08)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 10, color: "#555", lineHeight: 1.6, marginBottom: 4 }}>
-                          Jeder Eintrag zeigt wie der Tag <em>spezifisch auf dieses Bild/Produkt</em> angewendet wurde — nicht die generische Definition.
+                {/* ── PREVIEW TAB ── */}
+                {activeTab === "preview" && (
+                  <div
+                    id="tabpanel-preview"
+                    role="tabpanel"
+                    aria-labelledby="tab-preview"
+                    className="flex-1 overflow-y-auto"
+                  >
+                    {/* Debug Log Overlay */}
+                    <div className="mb-4 p-3 rounded bg-zinc-900/80 border border-zinc-800/50 backdrop-blur font-mono text-[9px]">
+                      <div className="flex justify-between items-center mb-2 px-1">
+                        <div className="uppercase text-[8px] opacity-40">Debug-System</div>
+                        <div className="flex gap-2">
+                          <span className={output ? "text-green-500" : "text-zinc-600"}>● Prompt</span>
+                          <span className={imageBase64 ? "text-green-500" : "text-zinc-600"}>● Image</span>
+                          <span className={isGeneratingPreviews ? "text-blue-500" : "text-zinc-600"}>● Active</span>
                         </div>
+                      </div>
+                      {debugLog.length > 0 ? (
+                        <div className="space-y-0.5 text-zinc-400">
+                          {debugLog.map((log, i) => <div key={i}>{log}</div>)}
+                        </div>
+                      ) : (
+                        <div className="text-zinc-600 italic">Warten auf Interaktion...</div>
+                      )}
+                    </div>
 
+                    {!output && !isGeneratingPreviews && (
+                      <div className="flex flex-col items-center justify-center h-full text-center p-10 opacity-30">
+                        <div className="text-4xl mb-4">🖼️</div>
+                        <div className="text-[12px] font-mono">Noch keine Vorschau generiert. Erstelle zuerst einen Prompt.</div>
+                      </div>
+                    )}
+
+                    {isGeneratingPreviews && (
+                      <div className="preview-grid">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="preview-card">
+                            <div className="preview-skeleton" />
+                            <div className="preview-badge">Generating...</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {!isGeneratingPreviews && previews.length > 0 && (
+                      <div className="preview-grid">
+                        {previews.map((url, i) => (
+                          <div key={i} className="preview-card">
+                            <img src={url} alt={`Preview ${i + 1}`} />
+                            <div className="preview-badge">Visual Preview {i + 1}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {error && (
+                      <div className="p-4 mb-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-[11px] font-mono">
+                        ⚠ {error}
+                      </div>
+                    )}
+
+                    {!isGeneratingPreviews && output && previews.length === 0 && (
+                      <div className="p-10 text-center">
+                        <button
+                          onClick={() => {
+                            console.log("[UI] Manual preview generation button clicked");
+                            window.alert("Diagnose: Button wurde geklickt. Versuche Generierung...");
+                            if (output?.main_prompt) {
+                              console.log("[UI] Calling generatePreviews with prompt:", output.main_prompt.slice(0, 50) + "...");
+                              generatePreviews(output.main_prompt, output.layers);
+                            } else {
+                              console.warn("[UI] Cannot generate preview: main_prompt is missing");
+                              alert("Fehler: Haupt-Prompt fehlt. Bitte generiere den Prompt neu.");
+                            }
+                          }}
+                          className="btn-secondary"
+                        >
+                          Vorschau manuell generieren
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── BREAKDOWN TAB ── */}
+                {activeTab === "breakdown" && (
+                  <div role="tabpanel" id="tabpanel-breakdown" aria-labelledby="tab-breakdown">
+                    <SectionDivider label="Prompt Breakdown — Tag-Anwendung auf dieses Produkt" color="var(--gold)" />
+                    {hasBreakdown ? (
+                      <div className="flex flex-col gap-2">
+                        <div
+                          className="hint mb-2 text-[10px]"
+                          style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}
+                        >
+                          Jeder Eintrag zeigt wie der Tag <em>spezifisch auf dieses Produkt</em> angewendet wurde.
+                        </div>
                         {Object.entries(promptBreakdown!).map(([tagLabel, explanation]) => (
                           <BreakdownRow
                             key={tagLabel}
@@ -1127,22 +1852,25 @@ export default function Home() {
                         ))}
                       </div>
                     ) : (
-                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textAlign: "center", paddingTop: 60 }}>
+                      <div
+                        className="text-center pt-16 text-[11px]"
+                        style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                      >
                         Keine Tags ausgewählt — wähle Tags aus der Orchestra Library und generiere erneut.
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* ── TAB: LAYERS ── */}
+                {/* ── LAYERS TAB ── */}
                 {activeTab === "layers" && output.layers && (
-                  <div>
-                    <SectionLabel color="var(--gold)">Ebenen-Analyse</SectionLabel>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div role="tabpanel" id="tabpanel-layers" aria-labelledby="tab-layers">
+                    <SectionDivider label="Ebenen-Analyse" color="var(--gold)" />
+                    <div className="flex flex-col gap-2.5">
                       {[
-                        ["world","Welt"], ["subject","Subjekt"], ["motion","Bewegung"],
-                        ["lighting","Licht"], ["lens","Linse"], ["color","Farbe"],
-                        ["physics","Physik"], ["intention","Intention"],
+                        ["world", "Welt"], ["subject", "Subjekt"], ["motion", "Bewegung"],
+                        ["lighting", "Licht"], ["lens", "Linse"], ["color", "Farbe"],
+                        ["physics", "Physik"], ["intention", "Intention"],
                       ].map(([key, label]) => {
                         const val = output.layers[key as keyof typeof output.layers];
                         if (!val) return null;
@@ -1152,19 +1880,48 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* ── TAB: TOOLS ── */}
+                {/* ── TOOLS TAB ── */}
                 {activeTab === "tools" && (
-                  <div>
-                    <SectionLabel color="var(--green)">Tool Empfehlung</SectionLabel>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                  <div role="tabpanel" id="tabpanel-tools" aria-labelledby="tab-tools">
+                    <SectionDivider label="Tool Empfehlung" color="var(--green)" />
+                    <div className="grid grid-cols-3 gap-3">
                       {tools.map(tool => {
                         const isRec = output.recommended_tool &&
                           tool.name.toLowerCase().includes(output.recommended_tool.toLowerCase().split(" ")[0]);
                         return (
-                          <div key={tool.name} style={{ background: isRec ? "rgba(74,222,128,0.05)" : "var(--surface)", border: `1px solid ${isRec ? "var(--green)" : "var(--border)"}`, borderRadius: 8, padding: "12px 10px", textAlign: "center" }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 5 }}>{tool.name}</div>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5 }}>{tool.use}</div>
-                            {isRec && <div style={{ display: "inline-block", marginTop: 7, fontSize: 8, padding: "2px 8px", background: "rgba(74,222,128,0.12)", color: "var(--green)", borderRadius: 2, fontFamily: "var(--font-mono)", letterSpacing: 1.5 }}>BESTE WAHL</div>}
+                          <div
+                            key={tool.name}
+                            className="rounded-lg p-4 text-center"
+                            style={{
+                              background: isRec ? "var(--green-subtle)" : "var(--surface)",
+                              border: `1px solid ${isRec ? "rgba(16,185,129,0.35)" : "var(--border)"}`,
+                            }}
+                          >
+                            <div
+                              className="text-[13px] font-semibold mb-2"
+                              style={{ fontFamily: "var(--font-display)", color: isRec ? "var(--green)" : "var(--text)" }}
+                            >
+                              {tool.name}
+                            </div>
+                            <div
+                              className="text-[10px] leading-relaxed mb-2"
+                              style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                            >
+                              {tool.use}
+                            </div>
+                            {isRec && (
+                              <span
+                                className="inline-block text-[8px] uppercase tracking-widest px-2 py-0.5 rounded"
+                                style={{
+                                  fontFamily: "var(--font-mono)",
+                                  background: "rgba(16,185,129,0.12)",
+                                  color: "var(--green)",
+                                  border: "1px solid rgba(16,185,129,0.2)",
+                                }}
+                              >
+                                Beste Wahl
+                              </span>
+                            )}
                           </div>
                         );
                       })}
@@ -1172,32 +1929,93 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* ── TAB: ANALYSE ── */}
+                {/* ── ANALYSIS TAB ── */}
                 {activeTab === "analyse" && (
                   geminiAnalysis ? (
-                    <div>
-                      <SectionLabel color="#4285f4">Gemini Vision — Rohdaten</SectionLabel>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div role="tabpanel" id="tabpanel-analyse" aria-labelledby="tab-analyse">
+                      <SectionDivider label="Gemini Vision — Rohdaten" color="var(--blue)" />
+                      <div className="flex flex-col gap-2">
                         {Object.entries(geminiAnalysis).map(([k, v]) => (
-                          <div key={k} style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 10, alignItems: "start" }}>
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "#4285f4", textTransform: "uppercase", letterSpacing: 1.5, paddingTop: 6 }}>{k}</span>
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "#888", background: "rgba(66,133,244,0.04)", borderRadius: 5, padding: "6px 10px", border: "1px solid rgba(66,133,244,0.1)", lineHeight: 1.6 }}>{v}</span>
+                          <div key={k} className="grid gap-2.5 items-start" style={{ gridTemplateColumns: "80px 1fr" }}>
+                            <span
+                              className="text-[9px] uppercase tracking-wide pt-1.5"
+                              style={{ fontFamily: "var(--font-mono)", color: "var(--blue)" }}
+                            >
+                              {k}
+                            </span>
+                            <span
+                              className="text-[12px] leading-relaxed rounded-md px-3 py-1.5"
+                              style={{
+                                fontFamily: "var(--font-mono)",
+                                color: "var(--text-secondary)",
+                                background: "var(--blue-subtle)",
+                                border: "1px solid rgba(59,130,246,0.1)",
+                              }}
+                            >
+                              {String(v)}
+                            </span>
                           </div>
                         ))}
                       </div>
                     </div>
                   ) : (
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", textAlign: "center", paddingTop: 60 }}>
+                    <div
+                      className="text-center pt-16 text-[11px]"
+                      style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                    >
                       Kein Bild hochgeladen — keine Gemini Analyse verfügbar.
                     </div>
                   )
                 )}
-
               </div>
             )}
           </div>
-        </div>
+        </section>
       </div>
+    </div>
+  );
+}
+
+// ─── Pipeline Dot ──────────────────────────────────────────────
+
+function PipelineDot({
+  label, status, activeColor,
+}: {
+  label: string;
+  status: "idle" | "active" | "done";
+  activeColor: string;
+}) {
+  const dotColor = status === "done"
+    ? "var(--green)"
+    : status === "active"
+      ? activeColor
+      : "var(--text-muted)";
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div
+        className="w-1.5 h-1.5 rounded-full"
+        style={{
+          background: dotColor,
+          boxShadow: status === "active" ? `0 0 6px ${activeColor}` : "none",
+          animation: status === "active" ? "glowPulse 1.5s infinite" : "none",
+        }}
+        aria-hidden="true"
+      />
+      <span
+        className="text-[10px] font-medium tracking-wide"
+        style={{ fontFamily: "var(--font-mono)", color: dotColor }}
+      >
+        {label}
+      </span>
+      {status !== "idle" && (
+        <span
+          className="text-[9px]"
+          style={{ fontFamily: "var(--font-mono)", color: dotColor }}
+        >
+          {status === "done" ? "✓" : "…"}
+        </span>
+      )}
     </div>
   );
 }

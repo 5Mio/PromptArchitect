@@ -2,24 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { LIBRARY } from "@/lib/constants";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
+// Initialisiere genAI später in der POST Funktion
+
 
 // ─── Build LIBRARY_TAGS dynamically from constants.ts ────────────────────────
 // Single source of truth — no manual sync needed, no label drift possible.
 const CAT_ID_TO_KEY: Record<string, string> = {
-  style:       "visueller_stil",
-  mood:        "stimmung",
-  kamera:      "kameratechnik",
-  licht:       "lichtgestaltung",
-  linse:       "linse_optik",
-  farbe:       "farbgebung",
-  physik:      "physik_material",
+  style: "visueller_stil",
+  mood: "stimmung",
+  kamera: "kameratechnik",
+  licht: "lichtgestaltung",
+  linse: "linse_optik",
+  farbe: "farbgebung",
+  physik: "physik_material",
   komposition: "komposition",
   atmosphaere: "atmosphaere_umgebung",
-  bewegung:    "bewegung_zeit",
-  director:    "director_philosophie",
-  zeitgeist:   "zeitgeist_aera",
-  sound:       "sound_synaesthesie",
+  bewegung: "bewegung_zeit",
+  director: "director_philosophie",
+  zeitgeist: "zeitgeist_aera",
+  sound: "sound_synaesthesie",
   produkt_typ: "produkt_typen",
 };
 
@@ -50,8 +54,10 @@ const MODE_CONTEXT: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageBase64, mimeType, useCaseInstruction, mode = "video" } =
-      await req.json();
+    const body = await req.json();
+    console.log("[analyze] Request received. Payload keys:", Object.keys(body));
+    const { imageBase64, mimeType, useCaseInstruction, mode = "video" } = body;
+
 
     if (!imageBase64) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
@@ -63,6 +69,9 @@ export async function POST(req: NextRequest) {
     if (!apiKey) {
       return NextResponse.json({ error: "Gemini API Key fehlt in .env.local" }, { status: 500 });
     }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+
 
     const systemPrompt = `You are an expert visual analyst for AI content generation.
 
@@ -122,6 +131,7 @@ Return ONLY valid JSON. No markdown fences, no explanation text.`;
     try {
       // ─── GEMINI EXECUTION ───────────────────────────────────────
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      console.log("[analyze] Calling Gemini 1.5 Flash...");
       const result = await model.generateContent([
         { text: systemPrompt },
         {
@@ -132,14 +142,26 @@ Return ONLY valid JSON. No markdown fences, no explanation text.`;
         },
       ]);
 
-      const text = result.response.text().trim();
+      const response = await result.response;
+      const text = response.text().trim();
+      console.log("[analyze] Gemini response received (length:", text.length, ")");
+
       const cleaned = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
 
       const start = cleaned.indexOf("{");
       const end = cleaned.lastIndexOf("}");
-      if (start === -1 || end === -1) throw new Error("No JSON found in Gemini response");
+      if (start === -1 || end === -1) {
+        console.error("[analyze] No JSON brace found in Gemini response. Cleaned text:", cleaned);
+        throw new Error("Kein gültiges JSON in der Gemini-Antwort gefunden");
+      }
 
-      parsed = JSON.parse(cleaned.slice(start, end + 1));
+      const jsonString = cleaned.slice(start, end + 1);
+      try {
+        parsed = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("[analyze] JSON parse error. JSON string:", jsonString);
+        throw new Error("Die KI-Antwort konnte nicht als JSON verarbeitet werden.");
+      }
       console.log("✓ Gemini Analysis Successful");
 
     } catch (geminiError: any) {
@@ -189,6 +211,9 @@ Return ONLY valid JSON. No markdown fences, no explanation text.`;
     }
 
     // Split analysis from recommendations
+    if (!parsed) {
+      throw new Error("AI response could not be parsed as a valid object");
+    }
     const { recommendations, ...analysis } = parsed;
 
     // Merge all 14 category tag arrays into single flat array for page.tsx
@@ -217,9 +242,12 @@ Return ONLY valid JSON. No markdown fences, no explanation text.`;
       recommendations: recommendations || null,
     });
 
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("[analyze] Error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (err: any) {
+    console.error("[analyze] Critical Error:", err);
+    return NextResponse.json({
+      error: err.message || "Unknown error",
+      details: err.stack || undefined
+    }, { status: 500 });
   }
+
 }

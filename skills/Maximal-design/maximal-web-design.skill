@@ -1,0 +1,157 @@
+{
+  "name": "maximal-web-design",
+  "version": "1.0.0",
+  "description": "Umfassender Skill für maximalistisches Webdesign mit Bold Aesthetics, Rich Color Palettes, Experimental Typography und Visual Chaos with Purpose. Perfekt für kreative Branchen, Event-Websites, Artist Portfolios und Youth-oriented Brands.",
+  "author": "WebdesignPro Team",
+  "license": "MIT",
+  "created": "2026-02-10",
+  "updated": "2026-02-10",
+  "tags": [
+    "webdesign",
+    "maximalism",
+    "bold-design",
+    "y2k",
+    "brutalism",
+    "editorial-design",
+    "cyberpunk",
+    "animations",
+    "glassmorphism",
+    "experimental",
+    "creative",
+    "frontend",
+    "css",
+    "typography"
+  ],
+  "use_cases": [
+    "Creative agency websites",
+    "Music festival landing pages",
+    "Artist/designer portfolios",
+    "Fashion brand launches",
+    "Event microsites",
+    "Youth culture brands",
+    "Experimental campaigns",
+    "Digital exhibitions"
+  ],
+  "not_suitable_for": [
+    "B2B services",
+    "Financial institutions",
+    "Healthcare",
+    "E-commerce (conversion-focused)",
+    "Corporate websites",
+    "Government/public sector"
+  ],
+  "features": [
+    "5 distinct maximalist design flavors",
+    "Complete Y2K landing page template",
+    "50+ CSS snippet library",
+    "Performance optimization guide",
+    "Accessibility guidelines",
+    "Mobile-responsive examples",
+    "Animation presets",
+    "Color palette collections"
+  ],
+  "design_flavors": [
+    {
+      "name": "Y2K / Retro-Futuristic",
+      "description": "Neon colors, chrome effects, glassmorphism",
+      "best_for": "Tech, music, gaming, festivals"
+    },
+    {
+      "name": "Brutalist Maximalism",
+      "description": "Industrial, anti-design, raw HTML aesthetic",
+      "best_for": "Streetwear, art galleries, punk culture"
+    },
+    {
+      "name": "Editorial / Magazine",
+      "description": "4-5 fonts, asymmetric grids, overlap",
+      "best_for": "Magazines, blogs, editorial sites"
+    },
+    {
+      "name": "Organic / Natural",
+      "description": "Blobs, earth tones, flowing compositions",
+      "best_for": "Wellness, eco brands, organic products"
+    },
+    {
+      "name": "Cyberpunk / Dystopian",
+      "description": "Dark base, neon accents, glitch effects",
+      "best_for": "Gaming, crypto, tech noir brands"
+    }
+  ],
+  "tech_stack": {
+    "html": "HTML5 (Semantic markup)",
+    "css": "CSS3 (Custom properties, animations, clip-paths)",
+    "javascript": "Vanilla JS (Optional: React/Vue for complex interactions)",
+    "fonts": "Google Fonts",
+    "performance": "GPU-accelerated animations, lazy loading, will-change optimization",
+    "accessibility": "WCAG AA compliance, reduced motion support"
+  },
+  "browser_support": {
+    "chrome": "Full support",
+    "firefox": "Full support",
+    "safari": "Full support (with -webkit- prefixes)",
+    "edge": "Full support",
+    "ie11": "Not supported"
+  },
+  "files": {
+    "SKILL.md": "Main documentation (45+ pages)",
+    "README.md": "Quick start guide and overview",
+    "LICENSE.txt": "MIT License",
+    "templates/y2k-landing-page.html": "Complete Y2K maximalist template",
+    "templates/css-snippets.md": "50+ copy-paste CSS snippets"
+  },
+  "learning_curve": {
+    "beginner": "Start with templates, modify colors/fonts",
+    "intermediate": "Combine CSS snippets, create custom designs",
+    "advanced": "Mix flavors, optimize performance, custom interactions"
+  },
+  "performance_tips": [
+    "Use transform & opacity for animations (GPU-accelerated)",
+    "Implement lazy loading for heavy elements",
+    "Add will-change for actively animated elements",
+    "Provide @media (prefers-reduced-motion) alternatives",
+    "Reduce complexity on mobile devices"
+  ],
+  "accessibility_requirements": [
+    "Text contrast ratio ≥ 4.5:1 (WCAG AA)",
+    "Reduced motion alternatives",
+    "Visible focus states",
+    "Alt texts for images",
+    "Keyboard navigation support",
+    "Semantic HTML structure"
+  ],
+  "common_pitfalls": [
+    "Unreadable typography (too many fonts, too small)",
+    "Chaos without structure (no visual hierarchy)",
+    "Slow performance (too many animations)",
+    "Poor mobile experience (desktop-only thinking)",
+    "Accessibility issues (low contrast, no reduced motion)"
+  ],
+  "inspiration_resources": [
+    "Awwwards.com (Filter: Experimental, Colorful)",
+    "Behance.com (Search: Maximalist Web Design)",
+    "Dribbble.com (Tags: #maximalism #bolddesign)",
+    "SiteInspire.com"
+  ],
+  "recommended_tools": [
+    "Coolors.co (Color palettes)",
+    "FontPair.co (Font combinations)",
+    "Clippy (CSS Clip-Path Generator)",
+    "Gradient Hunt (Gradient inspiration)",
+    "Google Fonts (Free fonts)"
+  ],
+  "target_audience": {
+    "age_range": "18-35 years",
+    "demographics": "Design-savvy, experimental, creative, early tech adopters",
+    "industries": "Creative, music, fashion, gaming, events, art"
+  },
+  "skill_difficulty": "Intermediate to Advanced",
+  "estimated_implementation_time": {
+    "simple_page": "4-8 hours",
+    "landing_page": "1-2 days",
+    "full_website": "1-2 weeks"
+  },
+  "maintenance": {
+    "updates": "Performance optimizations, new design flavors",
+    "support": "Community-driven, documentation-based"
+  }
+}

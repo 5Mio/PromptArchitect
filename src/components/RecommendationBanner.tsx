@@ -35,7 +35,12 @@ const TONE_LABELS: Record<string, string> = {
 
 export function RecommendationBanner({ recommendations: rec, onApply, onDismiss }: Props) {
   const [applied, setApplied] = useState(false);
-  const confColor = rec.confidence >= 90 ? "#4ade80" : rec.confidence >= 80 ? "#ffd166" : "#ff9944";
+
+  const confColor = rec.confidence >= 90
+    ? "var(--green)"
+    : rec.confidence >= 80
+      ? "var(--gold)"
+      : "#FB923C";
 
   const handleApply = () => {
     setApplied(true);
@@ -44,141 +49,143 @@ export function RecommendationBanner({ recommendations: rec, onApply, onDismiss 
   };
 
   return (
-    <div style={{
-      background: "linear-gradient(135deg, rgba(255,77,0,0.06) 0%, rgba(255,209,102,0.04) 100%)",
-      border: "1px solid rgba(255,77,0,0.25)",
-      borderRadius: 10,
-      overflow: "hidden",
-      animation: "recBannerIn 0.4s cubic-bezier(0.34,1.56,0.64,1)",
-    }}>
-      <style>{`
-        @keyframes recBannerIn {
-          from { opacity: 0; transform: translateY(-10px) scale(0.98); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes tagPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,0,0.4); }
-          50%       { box-shadow: 0 0 0 4px rgba(255,77,0,0); }
-        }
-        @keyframes glowPulse {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.6; }
-        }
-      `}</style>
-
+    <div
+      role="region"
+      aria-label="KI Setup-Empfehlung"
+      aria-live="polite"
+      style={{
+        background: "linear-gradient(135deg, rgba(255,77,0,0.05) 0%, rgba(245,158,11,0.03) 100%)",
+        border: "1px solid rgba(255,77,0,0.2)",
+        borderRadius: 10,
+        overflow: "hidden",
+        animation: "recBannerIn 0.4s cubic-bezier(0.16,1,0.3,1)",
+      }}
+    >
       {/* Header */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 14px", borderBottom: "1px solid rgba(255,77,0,0.12)",
-        background: "rgba(255,77,0,0.06)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 7, height: 7, borderRadius: "50%", background: confColor,
-            animation: "glowPulse 2s infinite",
-            boxShadow: `0 0 6px ${confColor}`,
-          }} />
-          <span style={{
-            fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 2.5,
-            textTransform: "uppercase", color: "#ff4d00",
-          }}>
+      <div
+        className="flex items-center justify-between px-3.5 py-2.5"
+        style={{
+          borderBottom: "1px solid rgba(255,77,0,0.1)",
+          background: "rgba(255,77,0,0.04)",
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            aria-hidden="true"
+            className="w-2 h-2 rounded-full"
+            style={{
+              background: confColor,
+              boxShadow: `0 0 6px ${confColor}`,
+              animation: "glowPulse 2s infinite",
+            }}
+          />
+          <span
+            className="text-[9px] uppercase tracking-widest font-medium"
+            style={{ fontFamily: "var(--font-mono)", color: "var(--accent)" }}
+          >
             Gemini Setup-Empfehlung
           </span>
-          <span style={{
-            fontFamily: "var(--font-mono)", fontSize: 9,
-            color: confColor, letterSpacing: 1,
-          }}>
-            {rec.confidence}% Sicherheit
+          <span
+            className="text-[9px] tracking-wide"
+            style={{ fontFamily: "var(--font-mono)", color: confColor }}
+          >
+            {rec.confidence}%
           </span>
         </div>
-        <button onClick={onDismiss} style={{
-          background: "none", border: "none", color: "#444",
-          cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px",
-        }}>×</button>
+        <button
+          onClick={onDismiss}
+          aria-label="Empfehlung schließen"
+          className="btn-ghost w-6 h-6 flex items-center justify-center text-base leading-none"
+        >
+          ×
+        </button>
       </div>
 
       {/* Summary */}
-      <div style={{ padding: "10px 14px 8px" }}>
-        <p style={{
-          fontFamily: "var(--font-mono)", fontSize: 11, color: "#888",
-          lineHeight: 1.6, margin: 0,
-        }}>{rec.setup_summary}</p>
+      <div className="px-3.5 py-2.5">
+        <p
+          className="text-[11px] leading-relaxed m-0"
+          style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}
+        >
+          {rec.setup_summary}
+        </p>
       </div>
 
-      {/* Recommended Settings Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: "0 14px 12px" }}>
+      {/* Settings grid */}
+      <div className="grid grid-cols-3 gap-2 px-3.5 pb-3">
         <RecSetting
           label="Use Case"
           value={USE_CASE_LABELS[rec.use_case] || rec.use_case}
           reason={rec.use_case_reason}
-          color="#ff4d00"
+          color="var(--accent)"
+          colorRaw="rgba(255,77,0"
         />
         <RecSetting
           label="Tonalität"
           value={TONE_LABELS[rec.tone] || rec.tone}
           reason={rec.tone_reason}
-          color="#ffd166"
+          color="var(--gold)"
+          colorRaw="rgba(245,158,11"
         />
         <RecSetting
           label="Videolänge"
-          value={`${rec.duration} Sekunden`}
+          value={`${rec.duration}s`}
           reason={rec.duration_reason}
-          color="#4ade80"
+          color="var(--green)"
+          colorRaw="rgba(16,185,129"
         />
       </div>
 
-      {/* Tags preview */}
-      <div style={{ padding: "0 14px 12px" }}>
-        <div style={{
-          fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: 2,
-          textTransform: "uppercase", color: "#555", marginBottom: 7,
-        }}>
+      {/* Tags */}
+      <div className="px-3.5 pb-3">
+        <div
+          className="text-[8px] uppercase tracking-widest mb-2"
+          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+        >
           {rec.tags.length} Tags empfohlen — {rec.tags_reason}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+        <div className="flex flex-wrap gap-1.5">
           {rec.tags.map(tag => (
-            <span key={tag} style={{
-              padding: "3px 9px", borderRadius: 20, fontSize: 10,
-              fontFamily: "var(--font-mono)", letterSpacing: 0.3,
-              border: "1px solid rgba(255,77,0,0.35)",
-              background: "rgba(255,77,0,0.08)",
-              color: "#ff6622",
-              animation: "tagPulse 2.5s ease-in-out infinite",
-            }}>{tag}</span>
+            <span
+              key={tag}
+              aria-label={`Empfohlener Tag: ${tag}`}
+              className="text-[10px] px-2.5 py-1 rounded-full"
+              style={{
+                fontFamily: "var(--font-mono)",
+                border: "1px solid rgba(255,77,0,0.3)",
+                background: "rgba(255,77,0,0.07)",
+                color: "#FF6622",
+                animation: "tagPulse 2.5s ease-in-out infinite",
+              }}
+            >
+              {tag}
+            </span>
           ))}
         </div>
       </div>
 
-      {/* Apply Button */}
-      <div style={{
-        padding: "10px 14px 12px",
-        borderTop: "1px solid rgba(255,77,0,0.1)",
-        display: "flex", alignItems: "center", gap: 10,
-      }}>
+      {/* Action buttons */}
+      <div
+        className="flex items-center gap-2.5 px-3.5 py-2.5"
+        style={{ borderTop: "1px solid rgba(255,77,0,0.08)" }}
+      >
         <button
           onClick={handleApply}
           disabled={applied}
+          className="flex-1 py-2 rounded-lg text-[11px] uppercase tracking-widest font-bold transition-all duration-200"
           style={{
-            flex: 1, padding: "9px 0",
-            background: applied ? "rgba(74,222,128,0.15)" : "rgba(255,77,0,0.85)",
-            border: `1px solid ${applied ? "#4ade80" : "var(--accent)"}`,
-            borderRadius: 7, cursor: applied ? "default" : "pointer",
-            fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800,
-            letterSpacing: 2, textTransform: "uppercase",
-            color: applied ? "#4ade80" : "white",
-            transition: "all 0.3s",
+            fontFamily: "var(--font-display)",
+            background: applied ? "var(--green-subtle)" : "rgba(255,77,0,0.85)",
+            border: `1px solid ${applied ? "rgba(16,185,129,0.4)" : "var(--accent)"}`,
+            color: applied ? "var(--green)" : "#fff",
+            cursor: applied ? "default" : "pointer",
           }}
         >
-          {applied ? "✓ Setup Übernommen" : "Setup Übernehmen →"}
+          {applied ? "✓ Setup übernommen" : "Setup übernehmen →"}
         </button>
         <button
           onClick={onDismiss}
-          style={{
-            padding: "9px 14px", background: "none",
-            border: "1px solid var(--border2)", borderRadius: 7,
-            cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10,
-            color: "var(--text-dim)", letterSpacing: 1,
-          }}
+          className="btn-secondary px-3 py-2 text-[10px]"
         >
           Ignorieren
         </button>
@@ -187,26 +194,38 @@ export function RecommendationBanner({ recommendations: rec, onApply, onDismiss 
   );
 }
 
-function RecSetting({ label, value, reason, color }: {
-  label: string; value: string; reason: string; color: string;
+// ─── Setting Card ─────────────────────────────────────────────
+
+function RecSetting({ label, value, reason, color, colorRaw }: {
+  label: string; value: string; reason: string;
+  color: string; colorRaw: string;
 }) {
   return (
-    <div style={{
-      background: `${color}08`,
-      border: `1px solid ${color}25`,
-      borderRadius: 7, padding: "8px 10px",
-    }}>
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 8, letterSpacing: 2,
-        textTransform: "uppercase", color: `${color}99`, marginBottom: 4,
-      }}>{label}</div>
-      <div style={{
-        fontFamily: "var(--font-display)", fontSize: 12, fontWeight: 700,
-        color, marginBottom: 4,
-      }}>{value}</div>
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 9, color: "#555", lineHeight: 1.5,
-      }}>{reason}</div>
+    <div
+      className="rounded-lg p-2.5"
+      style={{
+        background: `${colorRaw},0.06)`,
+        border: `1px solid ${colorRaw},0.2)`,
+      }}
+    >
+      <div
+        className="text-[8px] uppercase tracking-widest mb-1"
+        style={{ fontFamily: "var(--font-mono)", color: `${colorRaw},0.6)` }}
+      >
+        {label}
+      </div>
+      <div
+        className="text-[12px] font-bold mb-1"
+        style={{ fontFamily: "var(--font-display)", color }}
+      >
+        {value}
+      </div>
+      <div
+        className="text-[9px] leading-snug"
+        style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+      >
+        {reason}
+      </div>
     </div>
   );
 }

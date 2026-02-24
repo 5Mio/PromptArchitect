@@ -76,7 +76,12 @@ export async function POST(req: NextRequest) {
         }))
         : [];
 
+    const visibleText = (imageAnalysis as any)?.visible_text?.trim();
+
     const context = [
+      visibleText
+        ? `╔═══ VERBATIM TEXT IN IMAGE — ABSOLUTE PRIORITY ═══╗\nThe following text is the product's literal identity.\nEVERY word MUST appear in main_prompt EXACTLY as written — never paraphrase, translate, or substitute:\n"${visibleText}"\n╚════════════════════════════════════════════════════╝`
+        : null,
       hasImage
         ? `═══ GEMINI VISION ANALYSIS — USE ALL OF THIS DATA ═══\n${JSON.stringify(imageAnalysis, null, 2)}\n═══ END ANALYSIS ═══`
         : null,
@@ -166,6 +171,11 @@ SECTION D — ABSOLUTE RULES (NEVER VIOLATE)
 
 7. INTENTION STATEMENT
    End always with what the viewer should FEEL, not see.
+
+8. VERBATIM TEXT IS LAW
+   If VERBATIM TEXT IN IMAGE is provided at the top of the user context, every word MUST appear in main_prompt exactly as given.
+   Brand names, model numbers, slogans, labels → copy verbatim. Never substitute, shorten, or paraphrase.
+   "BOSS" stays "BOSS". "Air Max 97" stays "Air Max 97". "100m Water Resistant" stays "100m Water Resistant".
 
 ══════════════════════════════════════════════
 SECTION E — PROMPT_BREAKDOWN RULES (CRITICAL)

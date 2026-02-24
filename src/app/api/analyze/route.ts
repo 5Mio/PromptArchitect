@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { LIBRARY } from "@/lib/constants";
+import { LIBRARY, SCENE_LIBRARY } from "@/lib/constants";
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -37,6 +37,16 @@ const LIBRARY_TAGS: Record<string, string[]> = Object.fromEntries(
 const TAG_REFERENCE = Object.entries(LIBRARY_TAGS)
   .map(([key, tags]) => `${key}: ${tags.join(" | ")}`)
   .join("\n");
+
+// Kompakte Label-Referenz der Scene Library (nur Labels, keine Seed-Texte)
+const SCENE_SEED_REFERENCE = SCENE_LIBRARY
+  .map(cat => `${cat.id}: ${cat.entries.map(e => e.label).join(" | ")}`)
+  .join("\n");
+
+// Vollständiges Set gültiger Scene-Seed Labels für Validierung
+const VALID_SCENE_SEEDS = new Set(
+  SCENE_LIBRARY.flatMap(cat => cat.entries.map(e => e.label))
+);
 
 // ─── Bug #2 Fix: Mode-aware analysis focus ────────────────────────────────────
 const MODE_CONTEXT: Record<string, string> = {
@@ -93,6 +103,7 @@ Analyze the provided image and return a JSON object with these exact fields:
   "mood": "Emotional tone and atmosphere",
   "background": "Background elements and setting",
   "unique_details": "Distinctive visual characteristics worth preserving",
+  "visible_text": "ALL text visible in the image — brand names, logos, model numbers, labels, product names, slogans, serial numbers, ingredient lists — quoted VERBATIM exactly as it appears. Empty string if no text is visible.",
   "recommendations": {
     "use_case": "one of: produkt|marketing|story|humor|lifestyle|food|fashion|architektur|natur|technologie|event|portrait",
     "tone": "one of: luxury|documentary|editorial|dark|artistic|commercial",
@@ -110,12 +121,16 @@ Analyze the provided image and return a JSON object with these exact fields:
     "tags_director": ["0-1 tags from LIBRARY_TAGS.director_philosophie — director whose style matches"],
     "tags_zeitgeist": ["0-1 tags from LIBRARY_TAGS.zeitgeist_aera — era or cultural moment"],
     "tags_sound": ["0-1 tags from LIBRARY_TAGS.sound_synaesthesie — sonic atmosphere"],
-    "tags_produkt": ["0-2 tags from LIBRARY_TAGS.produkt_typen — product category if applicable"]
+    "tags_produkt": ["0-2 tags from LIBRARY_TAGS.produkt_typen — product category if applicable"],
+    "scene_seeds": ["0-3 labels from AVAILABLE SCENE SEEDS below — entries matching the image's mood, setting, or narrative. Empty array [] if nothing clearly fits."]
   }
 }
 
 AVAILABLE TAGS — copy labels with exact spelling, including all special characters:
 ${TAG_REFERENCE}
+
+AVAILABLE SCENE SEEDS — use exact labels only:
+${SCENE_SEED_REFERENCE}
 
 CRITICAL RULES FOR RECOMMENDATIONS:
 1. Each tags array MUST only use labels EXACTLY as listed above for that category
@@ -124,25 +139,44 @@ CRITICAL RULES FOR RECOMMENDATIONS:
 4. "use_case" must be exactly one of the 12 values
 5. "tone" must be exactly one of the 6 values
 6. Be creative and specific — director_philosophie and zeitgeist_aera add real depth
+7. scene_seeds: pick 0-3 labels EXACTLY as listed in AVAILABLE SCENE SEEDS — German umlauts included. Return [] if no strong match.
 
 Return ONLY valid JSON. No markdown fences, no explanation text.`;
 
     let parsed: any;
     try {
       // ─── GEMINI EXECUTION ───────────────────────────────────────
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      console.log("[analyze] Calling Gemini 1.5 Flash...");
-      const result = await model.generateContent([
-        { text: systemPrompt },
-        {
-          inlineData: {
-            mimeType: mimeType || "image/jpeg",
-            data: imageBase64,
-          },
-        },
-      ]);
+      const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro"];
+      const GEMINI_TIMEOUT_MS = 25000;
 
-      const response = await result.response;
+      const callGemini = (modelName: string) => {
+        const m = genAI.getGenerativeModel({ model: modelName });
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Gemini Timeout nach ${GEMINI_TIMEOUT_MS / 1000}s`)), GEMINI_TIMEOUT_MS)
+        );
+        return Promise.race([
+          m.generateContent([
+            { text: systemPrompt },
+            { inlineData: { mimeType: mimeType || "image/jpeg", data: imageBase64 } },
+          ]),
+          timeout,
+        ]);
+      };
+
+      let result: any;
+      for (const modelName of GEMINI_MODELS) {
+        try {
+          console.log(`[analyze] Trying ${modelName}...`);
+          result = await callGemini(modelName);
+          console.log(`[analyze] ✓ ${modelName} responded`);
+          break;
+        } catch (e: any) {
+          console.warn(`[analyze] ${modelName} failed: ${e.message}`);
+          if (modelName === GEMINI_MODELS[GEMINI_MODELS.length - 1]) throw e;
+        }
+      }
+
+      const response = result.response;
       const text = response.text().trim();
       console.log("[analyze] Gemini response received (length:", text.length, ")");
 
@@ -235,6 +269,14 @@ Return ONLY valid JSON. No markdown fences, no explanation text.`;
         ...(recommendations.tags_produkt || []),
       ].filter(t => typeof t === 'string' && t.length > 0);
       recommendations.tags = allTags;
+
+      // Validate scene_seeds — only keep labels that exist in SCENE_LIBRARY
+      if (Array.isArray(recommendations.scene_seeds)) {
+        recommendations.scene_seeds = recommendations.scene_seeds
+          .filter((s: unknown) => typeof s === "string" && VALID_SCENE_SEEDS.has(s));
+      } else {
+        recommendations.scene_seeds = [];
+      }
     }
 
     return NextResponse.json({

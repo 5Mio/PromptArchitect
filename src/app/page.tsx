@@ -328,6 +328,13 @@ function SectionDivider({ label, color }: { label: string; color: string }) {
   );
 }
 
+// ─── Preview Label Helper ──────────────────────────────────────
+
+function getPreviewLabel(index: number, sceneList: SceneScenario[]): string {
+  if (index === 0) return "Hauptstil";
+  return sceneList[index - 1]?.title ?? `Szene ${index}`;
+}
+
 // ─── Main App ─────────────────────────────────────────────────
 
 export default function Home() {
@@ -359,6 +366,9 @@ export default function Home() {
   const [activeLibraryCategory, setActiveLibraryCategory] = useState<string | null>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isGeneratingPreviews, setIsGeneratingPreviews] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [previewModal, setPreviewModal] = useState<{ url: string; label: string; index: number } | null>(null);
+  const [finalFormat, setFinalFormat] = useState<"text" | "json">("text");
 
   // Debugging-Hilfe
   useEffect(() => {
@@ -372,6 +382,30 @@ export default function Home() {
     };
     console.log("[DEBUG] window.forceGenerate initialized");
   }, [output]);
+
+  // Lightbox keyboard navigation
+  useEffect(() => {
+    if (!previewModal) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setPreviewModal(null); return; }
+      if (e.key === "ArrowRight") {
+        setPreviewModal(prev => {
+          if (!prev) return null;
+          const next = (prev.index + 1) % previews.length;
+          return { url: previews[next], label: getPreviewLabel(next, scenes), index: next };
+        });
+      }
+      if (e.key === "ArrowLeft") {
+        setPreviewModal(prev => {
+          if (!prev) return null;
+          const p = (prev.index - 1 + previews.length) % previews.length;
+          return { url: previews[p], label: getPreviewLabel(p, scenes), index: p };
+        });
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [previewModal, previews, scenes]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const currentUseCase = USE_CASES.find(u => u.id === useCase)!;
@@ -478,14 +512,25 @@ export default function Home() {
     console.log("[generatePreviews] Starting...", { mainPrompt: mainPrompt.slice(0, 30), hasLayers: !!layers });
     const imgLen = imageBase64?.length || 0;
     addToLog(`Start Preview (Image: ${imgLen} bytes)`);
+    setDebugOpen(true);
     setIsGeneratingPreviews(true);
     setPreviews([]);
     setError(""); // Fehler zurücksetzen
     try {
-      const visualizationPrompts = [mainPrompt];
+      // X-to-X editing instructions: product stays identical, environment/light/mood transforms.
+      // gpt-image-1 needs explicit "keep product, change scene" framing to apply the Claude prompt.
+      const editPrefix = "Keep this exact product unchanged and as the clear focal point. Apply the following cinematic visual style, environment, lighting and atmosphere to the scene around it: ";
+      const styleCore = mainPrompt.slice(0, 2600);
+
+      const visualizationPrompts: string[] = [
+        `${editPrefix}${styleCore}`,
+      ];
+
       if (scenes.length > 0) {
-        scenes.slice(0, 4).forEach(s => {
-          visualizationPrompts.push(`Visual representation of this scene: ${s.scenario}. Based on the style: ${mainPrompt}`);
+        scenes.slice(0, 3).forEach(s => {
+          visualizationPrompts.push(
+            `Keep this exact product unchanged and as the clear focal point. Place it in this scene: ${s.scenario} — ${s.environment}. Mood: ${s.mood}. Apply this cinematic quality: ${styleCore.slice(0, 600)}`
+          );
         });
       }
       addToLog(`Prompts: ${visualizationPrompts.length}`);
@@ -495,7 +540,8 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompts: visualizationPrompts,
-          imageBase64: imageBase64
+          imageBase64: imageBase64,
+          imageMime: imageMime,
         }),
       });
       addToLog(`API Status: ${res.status}`);
@@ -523,6 +569,7 @@ export default function Home() {
       console.log("[generatePreviews] Final Results:", { count: successfulImages.length, errors });
       addToLog(`Bilder: ${successfulImages.length}`);
       setPreviews(successfulImages);
+      if (successfulImages.length > 0) setDebugOpen(false);
       if (successfulImages.length === 0) {
         setError("Keine Bilder generiert. Eventuell API-Limit oder Safety Block?");
       }
@@ -541,7 +588,7 @@ export default function Home() {
     if (!imageBase64 && !text.trim()) return;
     setError("");
     setOutput(null);
-    setGeminiAnalysis(null);
+    if (!geminiDone) setGeminiAnalysis(null); // preserve cached analysis when re-generating
     setRecommendations(null);
     setRecDismissed(false);
 
@@ -612,6 +659,7 @@ export default function Home() {
     if (rec.tone) setTone(rec.tone);
     if (rec.duration) setDuration(rec.duration);
     if (rec.tags?.length) setSelectedTags(rec.tags);
+    if (rec.scene_seeds?.length) setSelectedSeeds(rec.scene_seeds);
   };
 
   const copyAll = () => {
@@ -636,12 +684,150 @@ export default function Home() {
 
   const tabs = [
     { id: "prompt", label: "Prompt" },
-    { id: "preview", label: "Vorschau" },
+    { id: "preview", label: previews.length > 0 ? `Vorschau (${previews.length})` : "Vorschau" },
     { id: "breakdown", label: `Breakdown${hasBreakdown ? ` (${Object.keys(promptBreakdown!).length})` : ""}` },
     { id: "layers", label: "Ebenen" },
     { id: "tools", label: "Tools" },
     { id: "analyse", label: "Rohdaten" },
+    { id: "final", label: output ? "Final ✦" : "Final" },
   ];
+
+  // ─── Final Prompt Builders ────────────────────────────────────
+
+  const buildFinalText = (): string => {
+    if (!output) return "";
+    const sep = "═══════════════════════════════════════════════════";
+    const line = "───────────────────────────────────────────────────";
+    const layers = output.layers;
+    const parts: string[] = [];
+
+    parts.push(sep);
+    parts.push("  FINAL PROMPT — PromptArchitect Pro");
+    parts.push(sep);
+
+    parts.push("\n▸ MAIN PROMPT");
+    parts.push(line);
+    parts.push(output.main_prompt);
+
+    if (selectedScene) {
+      parts.push("\n▸ SCENE CONTEXT");
+      parts.push(line);
+      parts.push(`${selectedScene.title} — ${selectedScene.environment}`);
+      parts.push(selectedScene.scenario);
+      parts.push(`Mood: ${selectedScene.mood}`);
+    }
+
+    parts.push("\n▸ LAYERS");
+    parts.push(line);
+    if (layers.world)     parts.push(`WORLD      : ${layers.world}`);
+    if (layers.subject)   parts.push(`SUBJECT    : ${layers.subject}`);
+    if (layers.motion)    parts.push(`MOTION     : ${layers.motion}`);
+    if (layers.lighting)  parts.push(`LIGHTING   : ${layers.lighting}`);
+    if (layers.lens)      parts.push(`LENS       : ${layers.lens}`);
+    if (layers.color)     parts.push(`COLOR      : ${layers.color}`);
+    if (layers.physics)   parts.push(`PHYSICS    : ${layers.physics}`);
+    if (layers.intention) parts.push(`INTENTION  : ${layers.intention}`);
+
+    // Breakdown
+    const breakdown = (output as any).prompt_breakdown as Record<string, string> | undefined;
+    if (breakdown && Object.keys(breakdown).length > 0) {
+      parts.push("\n▸ PROMPT BREAKDOWN");
+      parts.push(line);
+      Object.entries(breakdown).forEach(([tag, explanation]) => {
+        parts.push(`[${tag}]`);
+        parts.push(`  ${explanation}`);
+      });
+    }
+
+    parts.push("\n▸ NEGATIVE PROMPT");
+    parts.push(line);
+    parts.push(output.negative_prompt);
+
+    // Gemini Rohdaten
+    if (geminiAnalysis && Object.keys(geminiAnalysis).length > 0) {
+      parts.push("\n▸ SOURCE ANALYSIS — Gemini Vision");
+      parts.push(line);
+      Object.entries(geminiAnalysis).forEach(([k, v]) => {
+        parts.push(`${k.toUpperCase().padEnd(16)}: ${String(v)}`);
+      });
+    }
+
+    if (output.recommended_tool) {
+      parts.push("\n▸ RECOMMENDED TOOL");
+      parts.push(line);
+      parts.push(output.recommended_tool);
+    }
+
+    if (output.ghost_director) {
+      parts.push("\n▸ CREATIVE DIRECTION");
+      parts.push(line);
+      parts.push(`"${output.ghost_director}"`);
+    }
+
+    if (output.use_case_notes) {
+      parts.push("\n▸ USE CASE NOTES");
+      parts.push(line);
+      parts.push(output.use_case_notes);
+    }
+
+    parts.push("\n▸ METADATA");
+    parts.push(line);
+    parts.push(`Tone: ${tone}  ·  Mode: ${mode.toUpperCase()}  ·  ${mode === "video" ? `${duration}s` : "Image"}  ·  Use Case: ${useCase}`);
+    if (selectedTags.length > 0) parts.push(`Tags: ${selectedTags.join(", ")}`);
+    parts.push(`Quality: ${output.quality_score}%  ·  Detail Accuracy: ${output.detail_accuracy}%`);
+
+    parts.push("\n" + sep);
+    parts.push("  Generated by PromptArchitect Pro");
+    parts.push(sep);
+
+    return parts.join("\n");
+  };
+
+  const buildFinalJson = (): string => {
+    if (!output) return "{}";
+    const obj: Record<string, any> = {
+      finalPrompt: output.main_prompt,
+      negativePrompt: output.negative_prompt,
+      sceneContext: selectedScene
+        ? {
+            title: selectedScene.title,
+            scenario: selectedScene.scenario,
+            environment: selectedScene.environment,
+            mood: selectedScene.mood,
+          }
+        : null,
+      layers: output.layers,
+      promptBreakdown: (output as any).prompt_breakdown ?? {},
+      sourceAnalysis: geminiAnalysis ?? null,
+      recommendedTool: output.recommended_tool,
+      ghostDirector: output.ghost_director,
+      useCaseNotes: output.use_case_notes,
+      metadata: {
+        tone,
+        mode,
+        ...(mode === "video" ? { duration } : {}),
+        useCase,
+        activeTags: selectedTags,
+        qualityScore: output.quality_score,
+        detailAccuracy: output.detail_accuracy,
+        tagsIntegrated: (output as any).tags_integrated ?? null,
+      },
+    };
+    return JSON.stringify(obj, null, 2);
+  };
+
+  const downloadFinal = () => {
+    const content = finalFormat === "json" ? buildFinalJson() : buildFinalText();
+    const ext = finalFormat === "json" ? "json" : "txt";
+    const mime = finalFormat === "json" ? "application/json" : "text/plain";
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `promptarchitect-final-${Date.now()}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // ─── Render ───────────────────────────────────────────────────
 
@@ -879,8 +1065,8 @@ export default function Home() {
                   <img
                     src={imagePreview}
                     alt="Referenz"
-                    className="w-full object-cover block"
-                    style={{ height: 190 }}
+                    className="w-full block"
+                    style={{ objectFit: "contain", maxHeight: 480 }}
                   />
                   <div
                     className="absolute inset-x-0 bottom-0 flex items-center justify-between px-3 py-2"
@@ -1290,21 +1476,38 @@ export default function Home() {
                   <div className="flex flex-wrap" style={{ margin: -3 }}>
                     {cat.entries.map(entry => {
                       const isSel = selectedSeeds.includes(entry.label);
+                      const isRec = !!(recommendations?.scene_seeds?.includes(entry.label));
                       return (
                         <button
                           key={entry.label}
                           onClick={() => setSelectedSeeds(p =>
                             isSel ? p.filter(x => x !== entry.label) : [...p, entry.label]
                           )}
+                          aria-pressed={isSel}
+                          aria-label={`${entry.label}${isRec ? " — KI-empfohlen" : ""}${isSel ? " — ausgewählt" : ""}`}
                           className="tag-pill"
                           style={{
                             margin: 3,
-                            border: `1px solid ${isSel ? cat.color : `${cat.color}30`}`,
-                            background: isSel ? `${cat.color}20` : `${cat.color}08`,
-                            color: isSel ? cat.color : "var(--text-muted)",
+                            position: "relative",
+                            border: `1px solid ${isSel ? cat.color : isRec ? `${cat.color}70` : `${cat.color}30`}`,
+                            background: isSel ? `${cat.color}20` : isRec ? `${cat.color}10` : `${cat.color}08`,
+                            color: isSel ? cat.color : isRec ? `${cat.color}dd` : "var(--text-muted)",
+                            boxShadow: isRec ? `0 0 5px ${cat.color}35` : "none",
+                            animation: isRec ? "recTagGlow 2.5s ease-in-out infinite" : "none",
                           }}
                         >
                           {entry.label}
+                          {isRec && (
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                position: "absolute", top: 0, right: 0,
+                                width: 7, height: 7, borderRadius: "50%",
+                                background: isSel ? "var(--gold)" : "var(--accent)",
+                                boxShadow: `0 0 4px ${isSel ? "var(--gold)" : "var(--accent)"}`,
+                              }}
+                            />
+                          )}
                         </button>
                       );
                     })}
@@ -1753,22 +1956,34 @@ export default function Home() {
                     aria-labelledby="tab-preview"
                     className="flex-1 overflow-y-auto"
                   >
-                    {/* Debug Log Overlay */}
-                    <div className="mb-4 p-3 rounded bg-zinc-900/80 border border-zinc-800/50 backdrop-blur font-mono text-[9px]">
-                      <div className="flex justify-between items-center mb-2 px-1">
-                        <div className="uppercase text-[8px] opacity-40">Debug-System</div>
-                        <div className="flex gap-2">
+                    {/* Collapsible Debug Log */}
+                    <div
+                      className="mb-4 rounded border border-zinc-800/50 font-mono text-[9px] overflow-hidden"
+                      style={{ background: "var(--surface2)" }}
+                    >
+                      <button
+                        onClick={() => setDebugOpen(p => !p)}
+                        className="w-full flex justify-between items-center p-2 px-3"
+                        style={{ background: "transparent", border: "none", cursor: "pointer" }}
+                      >
+                        <span className="uppercase text-[8px] text-zinc-500 tracking-widest">Debug-System</span>
+                        <div className="flex gap-2 items-center">
                           <span className={output ? "text-green-500" : "text-zinc-600"}>● Prompt</span>
                           <span className={imageBase64 ? "text-green-500" : "text-zinc-600"}>● Image</span>
                           <span className={isGeneratingPreviews ? "text-blue-500" : "text-zinc-600"}>● Active</span>
+                          <span className="text-zinc-600 ml-1">{debugOpen ? "▲" : "▼"}</span>
                         </div>
-                      </div>
-                      {debugLog.length > 0 ? (
-                        <div className="space-y-0.5 text-zinc-400">
-                          {debugLog.map((log, i) => <div key={i}>{log}</div>)}
+                      </button>
+                      {debugOpen && (
+                        <div className="p-2 px-3 border-t border-zinc-800/50">
+                          {debugLog.length > 0 ? (
+                            <div className="space-y-0.5 text-zinc-400">
+                              {debugLog.map((log, i) => <div key={i}>{log}</div>)}
+                            </div>
+                          ) : (
+                            <div className="text-zinc-600 italic">Warten auf Interaktion...</div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="text-zinc-600 italic">Warten auf Interaktion...</div>
                       )}
                     </div>
 
@@ -1781,10 +1996,11 @@ export default function Home() {
 
                     {isGeneratingPreviews && (
                       <div className="preview-grid">
-                        {[1, 2, 3].map(i => (
+                        {[1, 2, 3, 4].map(i => (
                           <div key={i} className="preview-card">
                             <div className="preview-skeleton" />
-                            <div className="preview-badge">Generating...</div>
+                            <div className="preview-scene-num">{i}</div>
+                            <div className="preview-badge">Wird generiert…</div>
                           </div>
                         ))}
                       </div>
@@ -1792,12 +2008,39 @@ export default function Home() {
 
                     {!isGeneratingPreviews && previews.length > 0 && (
                       <div className="preview-grid">
-                        {previews.map((url, i) => (
-                          <div key={i} className="preview-card">
-                            <img src={url} alt={`Preview ${i + 1}`} />
-                            <div className="preview-badge">Visual Preview {i + 1}</div>
-                          </div>
-                        ))}
+                        {previews.map((url, i) => {
+                          const label = getPreviewLabel(i, scenes);
+                          const filename = `promptarchitect-${label.replace(/\s+/g, "-").toLowerCase()}.png`;
+                          return (
+                            <div key={i} className="preview-card">
+                              {/* Scene number */}
+                              <div className="preview-scene-num">{i + 1}</div>
+
+                              {/* Image — click opens lightbox */}
+                              <img
+                                src={url}
+                                alt={label}
+                                style={{ cursor: "zoom-in" }}
+                                onClick={() => setPreviewModal({ url, label, index: i })}
+                              />
+
+                              {/* Scene label */}
+                              <div className="preview-badge">{label}</div>
+
+                              {/* Download */}
+                              <a
+                                href={url}
+                                download={filename}
+                                onClick={e => e.stopPropagation()}
+                                className="preview-download"
+                                aria-label={`${label} herunterladen`}
+                                title="Herunterladen"
+                              >
+                                ↓
+                              </a>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -1811,14 +2054,8 @@ export default function Home() {
                       <div className="p-10 text-center">
                         <button
                           onClick={() => {
-                            console.log("[UI] Manual preview generation button clicked");
-                            window.alert("Diagnose: Button wurde geklickt. Versuche Generierung...");
                             if (output?.main_prompt) {
-                              console.log("[UI] Calling generatePreviews with prompt:", output.main_prompt.slice(0, 50) + "...");
                               generatePreviews(output.main_prompt, output.layers);
-                            } else {
-                              console.warn("[UI] Cannot generate preview: main_prompt is missing");
-                              alert("Fehler: Haupt-Prompt fehlt. Bitte generiere den Prompt neu.");
                             }
                           }}
                           className="btn-secondary"
@@ -1967,11 +2204,221 @@ export default function Home() {
                     </div>
                   )
                 )}
+
+                {/* ── FINAL TAB ── */}
+                {activeTab === "final" && (
+                  <div role="tabpanel" id="tabpanel-final" aria-labelledby="tab-final">
+                    {!output ? (
+                      <div className="h-full flex flex-col items-center justify-center gap-4 text-center py-20 opacity-30">
+                        <div className="text-4xl" aria-hidden="true">✦</div>
+                        <div
+                          className="text-[11px]"
+                          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                        >
+                          Erst Prompt generieren — dann erscheint hier der gebündelte Export.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-4">
+                        {/* Header: Format-Toggle + Actions */}
+                        <div className="flex items-center justify-between">
+                          {/* Toggle */}
+                          <div
+                            className="flex p-0.5 rounded-lg gap-0.5"
+                            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                          >
+                            {(["text", "json"] as const).map(fmt => (
+                              <button
+                                key={fmt}
+                                onClick={() => setFinalFormat(fmt)}
+                                className="px-3 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all duration-150"
+                                style={{
+                                  fontFamily: "var(--font-display)",
+                                  background: finalFormat === fmt ? "var(--accent)" : "transparent",
+                                  color: finalFormat === fmt ? "#fff" : "var(--text-muted)",
+                                  border: "none",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {fmt === "text" ? "Fließtext" : "JSON"}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                const content = finalFormat === "json" ? buildFinalJson() : buildFinalText();
+                                navigator.clipboard.writeText(content);
+                              }}
+                              className="copy-btn"
+                            >
+                              ⎘ Kopieren
+                            </button>
+                            <button
+                              onClick={downloadFinal}
+                              className="copy-btn"
+                            >
+                              ↓ Download .{finalFormat === "json" ? "json" : "txt"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Content */}
+                        <pre
+                          className="prompt-block"
+                          style={{
+                            whiteSpace: "pre-wrap",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: finalFormat === "json" ? 11 : 11.5,
+                            lineHeight: 1.7,
+                            color: finalFormat === "json" ? "#A8D8A8" : "var(--text-secondary)",
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            borderLeft: `3px solid ${finalFormat === "json" ? "var(--green)" : "var(--accent)"}`,
+                            padding: "16px 20px",
+                            borderRadius: 8,
+                            overflowX: "auto",
+                          }}
+                        >
+                          {finalFormat === "json" ? buildFinalJson() : buildFinalText()}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </section>
       </div>
+
+      {/* ── LIGHTBOX MODAL ────────────────────────────────────── */}
+      {previewModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(10px)" }}
+          onClick={() => setPreviewModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Vorschau: ${previewModal.label}`}
+        >
+          {/* Counter + label */}
+          <div
+            className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-[11px]"
+            style={{
+              fontFamily: "var(--font-mono)",
+              background: "rgba(0,0,0,0.7)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "var(--text-secondary)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ color: "var(--text-muted)", marginRight: 8 }}>
+              {previewModal.index + 1}/{previews.length}
+            </span>
+            {previewModal.label}
+          </div>
+
+          {/* Image */}
+          <img
+            src={previewModal.url}
+            alt={previewModal.label}
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: "min(90vw, 900px)",
+              maxHeight: "80vh",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 32px 80px rgba(0,0,0,0.8)",
+              objectFit: "contain",
+            }}
+          />
+
+          {/* Close */}
+          <button
+            onClick={() => setPreviewModal(null)}
+            aria-label="Schließen (Escape)"
+            style={{
+              position: "absolute", top: 16, right: 16,
+              background: "rgba(0,0,0,0.6)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "var(--text-secondary)",
+              width: 36, height: 36, borderRadius: 8,
+              cursor: "pointer", fontSize: 20,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            ×
+          </button>
+
+          {/* Prev / Next */}
+          {previews.length > 1 && (
+            <>
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  const p = (previewModal.index - 1 + previews.length) % previews.length;
+                  setPreviewModal({ url: previews[p], label: getPreviewLabel(p, scenes), index: p });
+                }}
+                aria-label="Vorheriges Bild"
+                style={{
+                  position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)",
+                  background: "rgba(0,0,0,0.6)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "var(--text-secondary)",
+                  width: 40, height: 40, borderRadius: 8,
+                  cursor: "pointer", fontSize: 22,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                ‹
+              </button>
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  const n = (previewModal.index + 1) % previews.length;
+                  setPreviewModal({ url: previews[n], label: getPreviewLabel(n, scenes), index: n });
+                }}
+                aria-label="Nächstes Bild"
+                style={{
+                  position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)",
+                  background: "rgba(0,0,0,0.6)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "var(--text-secondary)",
+                  width: 40, height: 40, borderRadius: 8,
+                  cursor: "pointer", fontSize: 22,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                ›
+              </button>
+            </>
+          )}
+
+          {/* Download in lightbox */}
+          <a
+            href={previewModal.url}
+            download={`promptarchitect-${previewModal.label.replace(/\s+/g, "-").toLowerCase()}.png`}
+            onClick={e => e.stopPropagation()}
+            aria-label={`${previewModal.label} herunterladen`}
+            title="Herunterladen"
+            style={{
+              position: "absolute", bottom: 16, right: 16,
+              background: "rgba(0,0,0,0.6)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "var(--text-secondary)",
+              width: 36, height: 36, borderRadius: 8,
+              fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
+              textDecoration: "none",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            ↓
+          </a>
+        </div>
+      )}
     </div>
   );
 }

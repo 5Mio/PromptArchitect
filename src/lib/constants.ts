@@ -1056,7 +1056,8 @@ export interface GeminiAnalysis {
   details: string;
   style: string;
   technical: string;
-  [key: string]: string;
+  visible_text?: string;
+  [key: string]: string | undefined;
 }
 
 export interface PromptOutput {

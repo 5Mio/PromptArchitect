@@ -11,6 +11,7 @@ export interface Recommendations {
   duration_reason: string;
   tags: string[];
   tags_reason: string;
+  scene_seeds?: string[];
   confidence: number;
   setup_summary: string;
 }
@@ -163,6 +164,37 @@ export function RecommendationBanner({ recommendations: rec, onApply, onDismiss 
           ))}
         </div>
       </div>
+
+      {/* Scene Seeds */}
+      {rec.scene_seeds && rec.scene_seeds.length > 0 && (
+        <div className="px-3.5 pb-3">
+          <div
+            className="text-[8px] uppercase tracking-widest mb-2 flex items-center gap-1.5"
+            style={{ fontFamily: "var(--font-mono)", color: "#38bdf8" }}
+          >
+            <span aria-hidden="true">◈</span>
+            {rec.scene_seeds.length} Scene {rec.scene_seeds.length === 1 ? "Seed" : "Seeds"} empfohlen
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {rec.scene_seeds.map(seed => (
+              <span
+                key={seed}
+                aria-label={`Empfohlener Scene Seed: ${seed}`}
+                className="text-[10px] px-2.5 py-1 rounded-full"
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  border: "1px solid rgba(56,189,248,0.3)",
+                  background: "rgba(56,189,248,0.07)",
+                  color: "#38bdf8",
+                  animation: "tagPulse 2.5s ease-in-out infinite",
+                }}
+              >
+                {seed}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Action buttons */}
       <div
